@@ -1,7 +1,7 @@
 """启动器网格视图"""
 
 import uuid
-from tkinter import Canvas, Menu
+from tkinter import Canvas, Menu, Toplevel, Entry, Frame, Label, StringVar
 from .base import BaseView
 from ..widgets.draw import rrect, pill
 
@@ -15,6 +15,7 @@ class LauncherView(BaseView):
         self._cols = grid[0]
         self._rows = grid[1]
         self._current_page = 0
+        self._search_active = False
 
     @property
     def _pages(self):
@@ -34,6 +35,20 @@ class LauncherView(BaseView):
 
         mx = 10
         cw = w - 20
+
+        # search bar
+        sb_h = 24
+        rrect(canvas, mx, y, mx + cw, y + sb_h, 12,
+              fill=c['card'], outline=c['border_subtle'], tags='lnch_search')
+        canvas.create_text(mx + 14, y + sb_h // 2, text="🔍",
+                           font=('Segoe UI Emoji', 7), fill=c['dim'],
+                           anchor='w', tags='lnch_search')
+        canvas.create_text(mx + 30, y + sb_h // 2, text="搜索动作...",
+                           font=(self._f, 7), fill=c['dim'],
+                           anchor='w', tags='lnch_search')
+        canvas.create_rectangle(mx, y, mx + cw, y + sb_h,
+                                fill='', outline='', tags='lnch_search')
+        y += sb_h + 6
         cell_gap = 6
         cell_w = (cw - (self._cols - 1) * cell_gap) // self._cols
         cell_h = 52
@@ -164,6 +179,9 @@ class LauncherView(BaseView):
                 return True
             if tag == 'lnch_grid':
                 return True  # 空格子吞掉点击，不触发拖拽
+            if tag == 'lnch_search':
+                self._open_search()
+                return True
         return False
 
     def on_right_click(self, canvas: Canvas, event, tags: list[str]):
@@ -287,3 +305,142 @@ class LauncherView(BaseView):
         if not pages:
             pages.append({'name': '工具', 'actions': []})
             self._current_page = 0
+
+    # ── 搜索 ──
+
+    def _get_all_actions(self) -> list[dict]:
+        """收集所有页面的动作（带页面索引）"""
+        results = []
+        for pi, page in enumerate(self._pages):
+            for ai, action in enumerate(page.get('actions', [])):
+                if action is not None:
+                    results.append({**action, '_page': pi, '_idx': ai})
+        return results
+
+    def _fuzzy_match(self, query: str, text: str) -> bool:
+        """简单模糊匹配：query 的每个字符按顺序出现在 text 中"""
+        query = query.lower()
+        text = text.lower()
+        qi = 0
+        for ch in text:
+            if qi < len(query) and ch == query[qi]:
+                qi += 1
+        return qi == len(query)
+
+    def _open_search(self):
+        """打开搜索浮窗"""
+        if self._search_active:
+            return
+        self._search_active = True
+        c = self.theme
+        root = self.app.root
+
+        dlg = Toplevel(root)
+        dlg.overrideredirect(True)
+        dlg.attributes('-topmost', True)
+        dlg.configure(bg=c['border'])
+
+        inner = Frame(dlg, bg=c['bg'])
+        inner.pack(fill='both', expand=True, padx=1, pady=1)
+
+        # 搜索输入框
+        search_var = StringVar()
+        entry = Entry(inner, bg=c['card'], fg=c['text'],
+                      insertbackground=c['accent'], relief='flat',
+                      font=(self._f, 10), bd=0, highlightthickness=1,
+                      highlightbackground=c['border_subtle'],
+                      highlightcolor=c['accent'],
+                      textvariable=search_var)
+        entry.pack(fill='x', padx=8, pady=(8, 4), ipady=6)
+
+        # 结果列表
+        results_frame = Frame(inner, bg=c['bg'])
+        results_frame.pack(fill='both', expand=True, padx=8, pady=(0, 8))
+
+        result_labels = []
+        selected_idx = [0]
+        matched_actions = []
+
+        def update_results(*_):
+            query = search_var.get().strip()
+            # 清除旧结果
+            for lbl in result_labels:
+                lbl.destroy()
+            result_labels.clear()
+            matched_actions.clear()
+            selected_idx[0] = 0
+
+            if not query:
+                dlg.geometry(f'300x50')
+                return
+
+            all_actions = self._get_all_actions()
+            for act in all_actions:
+                label = act.get('label', '')
+                if self._fuzzy_match(query, label):
+                    matched_actions.append(act)
+                if len(matched_actions) >= 8:
+                    break
+
+            for i, act in enumerate(matched_actions):
+                icon = act.get('icon', '✦')
+                label = act.get('label', '')
+                atype = act.get('type', '')
+                lbl = Label(results_frame, text=f"  {icon}  {label}",
+                            fg=c['text'], bg=c['card'] if i != 0 else c['accent_glow'],
+                            font=(self._f, 9), anchor='w', padx=8, pady=4,
+                            cursor='hand2')
+                lbl.pack(fill='x', pady=1)
+                lbl.bind('<Button-1>', lambda e, idx=i: execute_result(idx))
+                lbl.bind('<Enter>', lambda e, idx=i: highlight_result(idx))
+                result_labels.append(lbl)
+
+            h = 50 + len(matched_actions) * 30
+            dlg.geometry(f'300x{h}')
+
+        def highlight_result(idx):
+            selected_idx[0] = idx
+            for i, lbl in enumerate(result_labels):
+                if i == idx:
+                    lbl.configure(bg=c['accent_glow'])
+                else:
+                    lbl.configure(bg=c['card'])
+
+        def execute_result(idx=None):
+            if idx is None:
+                idx = selected_idx[0]
+            if 0 <= idx < len(matched_actions):
+                act = matched_actions[idx]
+                close()
+                self.app.executor.execute(act)
+
+        def on_key(event):
+            if event.keysym == 'Down':
+                new_idx = min(selected_idx[0] + 1, len(matched_actions) - 1)
+                highlight_result(new_idx)
+                return 'break'
+            elif event.keysym == 'Up':
+                new_idx = max(selected_idx[0] - 1, 0)
+                highlight_result(new_idx)
+                return 'break'
+            elif event.keysym == 'Return':
+                execute_result()
+                return 'break'
+
+        def close(event=None):
+            self._search_active = False
+            dlg.destroy()
+
+        search_var.trace_add('write', update_results)
+        entry.bind('<KeyPress>', on_key)
+        dlg.bind('<Escape>', close)
+        dlg.bind('<FocusOut>', lambda e: dlg.after(200, close))
+
+        # 定位到面板上方居中
+        dw = 300
+        dlg.geometry(f'{dw}x50')
+        dlg.update_idletasks()
+        px = root.winfo_rootx() + (root.winfo_width() - dw) // 2
+        py = root.winfo_rooty() + 42
+        dlg.geometry(f"+{px}+{py}")
+        entry.focus_set()
