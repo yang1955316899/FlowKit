@@ -16,9 +16,18 @@ class ActionExecutor:
         self._root = root
         self._theme = theme
         self._on_feedback = None  # callback(msg) for toast
+        self._api_server = None
+        self._script_runner = None
 
     def set_feedback_callback(self, cb):
         self._on_feedback = cb
+
+    def set_api_server(self, server):
+        """注入平台 API 服务实例"""
+        self._api_server = server
+        if server:
+            from .script_runner import ScriptRunner
+            self._script_runner = ScriptRunner(api_port=server.port)
 
     def execute(self, action: dict):
         """按 type 分发执行"""
@@ -34,6 +43,7 @@ class ActionExecutor:
             'snippet': self._exec_snippet,
             'keys': self._exec_keys,
             'combo': self._exec_combo,
+            'script': self._exec_script,
         }.get(t)
         if handler:
             threading.Thread(target=handler, args=(action,), daemon=True).start()
@@ -169,9 +179,65 @@ class ActionExecutor:
                 'shell': self._exec_shell,
                 'snippet': self._exec_snippet,
                 'keys': self._exec_keys,
+                'script': self._exec_script,
             }.get(t)
             if handler:
                 handler(step)
+
+    def _exec_script(self, action: dict):
+        """执行 Python 脚本"""
+        if not self._script_runner:
+            self._feedback("脚本引擎未初始化!")
+            return
+
+        mode = action.get('mode', 'inline')
+        timeout = action.get('timeout', 30)
+        show_output = action.get('show_output', True)
+
+        if show_output and self._root and self._theme:
+            self._root.after(0, self._show_script_output, action)
+            return
+
+        # 静默执行
+        if mode == 'file':
+            path = action.get('path', '')
+            result = self._script_runner.run_file(path, timeout=timeout)
+        else:
+            code = action.get('code', '')
+            result = self._script_runner.run(code, timeout=timeout)
+
+        if result.success:
+            self._feedback("脚本完成!")
+        else:
+            self._feedback("脚本失败!")
+
+    def _show_script_output(self, action):
+        """在输出窗口中运行脚本"""
+        from ..dialogs.shell_output import ShellOutputDialog
+        title = action.get('label', '脚本')
+        mode = action.get('mode', 'inline')
+        timeout = action.get('timeout', 30)
+
+        dlg = ShellOutputDialog(self._root, self._theme, title=title)
+
+        def run():
+            def on_output(line):
+                dlg.win.after(0, dlg._append_text, line)
+
+            if mode == 'file':
+                path = action.get('path', '')
+                result = self._script_runner.run_file(path, timeout=timeout,
+                                                       on_output=on_output)
+            else:
+                code = action.get('code', '')
+                result = self._script_runner.run(code, timeout=timeout,
+                                                  on_output=on_output)
+
+            if result.stderr:
+                dlg.win.after(0, dlg._append_text, f'\n{result.stderr}')
+            dlg.win.after(0, dlg._set_status, result.returncode)
+
+        threading.Thread(target=run, daemon=True).start()
 
 
 # ── 按键模拟工具 ──

@@ -9,6 +9,7 @@ from pathlib import Path
 from .core.window import WindowManager
 from .core.scheduler import Scheduler
 from .core.actions import ActionExecutor
+from .core.platform_api import PlatformAPIServer
 from .themes.dark import DARK
 from .utils.http import HttpClient
 from .cards.token_stats import TokenStatsCard
@@ -60,6 +61,12 @@ class App:
         # action executor
         self.executor = ActionExecutor(root=self.root, theme=self.theme)
         self.executor.set_feedback_callback(self._show_toast)
+
+        # platform API server for script actions
+        self._api_server = PlatformAPIServer(
+            root=self.root, theme=self.theme, feedback_cb=self._show_toast)
+        self._api_server.start()
+        self.executor.set_api_server(self._api_server)
 
         # views
         self._views: dict[str, 'BaseView'] = {}
@@ -409,6 +416,7 @@ class App:
         self._start_hotkey()
         self.scheduler.start(); self._check_mouse(); self.root.mainloop()
         self._stop_hotkey()
+        self._api_server.stop()
 
     def _start_hotkey(self):
         """启动全局热键和鼠标钩子"""

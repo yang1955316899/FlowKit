@@ -14,6 +14,7 @@ ACTION_TYPES = [
     ('snippet', '文本'),
     ('keys', '按键'),
     ('combo', '组合'),
+    ('script', 'Python'),
 ]
 
 # target 字段的标签随类型变化
@@ -26,14 +27,16 @@ TARGET_LABELS = {
     'snippet': '要复制的文本',
     'keys': '按键组合 (如 ctrl+shift+a)',
     'combo': '描述',
+    'script': '描述',
 }
 
 
 class ActionDialog:
 
-    def __init__(self, parent, theme: dict, action: dict = None):
+    def __init__(self, parent, theme: dict, action: dict = None, executor=None):
         self.result = None
         self.theme = theme
+        self._executor = executor
         self._f = theme['font']
         self._fm = theme['mono']
         self._drag = {'x': 0, 'y': 0}
@@ -161,6 +164,24 @@ class ActionDialog:
                                   fg=theme['dim'], bg=theme['bg'], font=(self._fm, 7))
         self._combo_info.pack(anchor='w', pady=(4, 0))
 
+        # Script editor button (script only)
+        self._script_frame = Frame(self._fields_frame, bg=theme['bg'])
+        self._script_code = action.get('code', '') if action else ''
+        self._script_mode = action.get('mode', 'inline') if action else 'inline'
+        self._script_path = action.get('path', '') if action else ''
+        self._script_timeout = action.get('timeout', 30) if action else 30
+        self._script_show_output = action.get('show_output', True) if action else True
+
+        script_btn = Label(self._script_frame, text="编辑脚本...", fg=theme['accent'],
+                           bg=theme['card2'], font=(self._f, 8), cursor='hand2',
+                           padx=10, pady=4)
+        script_btn.pack(fill='x')
+        script_btn.bind('<Button-1>', lambda e: self._edit_script())
+        self._script_info = Label(self._script_frame,
+                                   text=self._get_script_info(),
+                                   fg=theme['dim'], bg=theme['bg'], font=(self._fm, 7))
+        self._script_info.pack(anchor='w', pady=(4, 0))
+
         # icon picker
         self._icon_var = StringVar(value=action.get('icon', '\u2726') if action else '\u2726')
         icon_frame = Frame(self._form, bg=theme['bg'])
@@ -248,6 +269,7 @@ class ActionDialog:
         self._shell_frame.pack_forget()
         self._output_frame.pack_forget()
         self._combo_frame.pack_forget()
+        self._script_frame.pack_forget()
 
         # show relevant ones
         if t == 'app':
@@ -258,6 +280,8 @@ class ActionDialog:
             self._output_frame.pack(fill='x', pady=(6, 0))
         elif t == 'combo':
             self._combo_frame.pack(fill='x', pady=(8, 0))
+        elif t == 'script':
+            self._script_frame.pack(fill='x', pady=(8, 0))
 
     # ── shell type ──
 
@@ -307,6 +331,54 @@ class ActionDialog:
             self._combo_steps = result['steps']
             self._combo_delay = result['delay']
             self._combo_info.configure(text=f"{len(self._combo_steps)} 个步骤, {self._combo_delay}ms 延迟")
+
+    # ── script editor ──
+
+    def _edit_script(self):
+        from .script_editor import ScriptEditorDialog
+
+        run_cb = None
+        if self._executor and self._executor._script_runner:
+            runner = self._executor._script_runner
+
+            def run_cb(code, mode, path, on_output):
+                import threading
+
+                def do_run():
+                    if mode == 'file':
+                        result = runner.run_file(path, timeout=30, on_output=on_output)
+                    else:
+                        result = runner.run(code, timeout=30, on_output=on_output)
+                    if result.stderr:
+                        on_output(f'\n{result.stderr}')
+                    status = '完成' if result.success else f'失败 (退出码 {result.returncode})'
+                    on_output(f'\n--- {status} ---\n')
+
+                threading.Thread(target=do_run, daemon=True).start()
+
+        result = ScriptEditorDialog(
+            self.win, self.theme,
+            code=self._script_code,
+            mode=self._script_mode,
+            file_path=self._script_path,
+            timeout=self._script_timeout,
+            show_output=self._script_show_output,
+            run_callback=run_cb,
+        ).show()
+        if result:
+            self._script_mode = result.get('mode', 'inline')
+            self._script_code = result.get('code', '')
+            self._script_path = result.get('path', '')
+            self._script_timeout = result.get('timeout', 30)
+            self._script_show_output = result.get('show_output', True)
+            self._script_info.configure(text=self._get_script_info())
+
+    def _get_script_info(self):
+        if self._script_mode == 'file':
+            p = self._script_path or '未选择'
+            return f"文件: {p}"
+        lines = len(self._script_code.split('\n')) if self._script_code else 0
+        return f"内嵌代码, {lines} 行"
 
     # ── icon picker ──
 
@@ -384,6 +456,16 @@ class ActionDialog:
         if action_type == 'combo':
             result['steps'] = self._combo_steps
             result['delay'] = self._combo_delay
+
+        if action_type == 'script':
+            result['mode'] = self._script_mode
+            result['timeout'] = self._script_timeout
+            if self._script_show_output:
+                result['show_output'] = True
+            if self._script_mode == 'inline':
+                result['code'] = self._script_code
+            else:
+                result['path'] = self._script_path
 
         self.result = result
         self.win.destroy()

@@ -214,7 +214,8 @@ class LauncherView(BaseView):
 
     def _add_action(self):
         from ..dialogs.action_dialog import ActionDialog
-        result = ActionDialog(self.app.root, self.theme).show()
+        result = ActionDialog(self.app.root, self.theme,
+                              executor=self.app.executor).show()
         if result:
             result['id'] = str(uuid.uuid4())[:8]
             self._ensure_page()
@@ -241,7 +242,8 @@ class LauncherView(BaseView):
         if idx >= len(actions) or actions[idx] is None:
             return
         from ..dialogs.action_dialog import ActionDialog
-        result = ActionDialog(self.app.root, self.theme, action=actions[idx]).show()
+        result = ActionDialog(self.app.root, self.theme, action=actions[idx],
+                              executor=self.app.executor).show()
         if result:
             result['id'] = actions[idx].get('id', str(uuid.uuid4())[:8])
             actions[idx] = result
