@@ -16,6 +16,12 @@ class LauncherView(BaseView):
         self._rows = grid[1]
         self._current_page = 0
         self._search_active = False
+        # 拖拽排序状态
+        self._drag_idx = None       # 正在拖拽的动作索引
+        self._drag_start_xy = None  # 按下时的坐标
+        self._drag_active = False   # 是否已进入拖拽模式
+        self._grid_origin = (0, 0)  # 网格左上角坐标
+        self._cell_size = (0, 0)    # 单元格尺寸（含间距）
 
     @property
     def _pages(self):
@@ -53,6 +59,10 @@ class LauncherView(BaseView):
         cell_w = (cw - (self._cols - 1) * cell_gap) // self._cols
         cell_h = 52
 
+        # 记录网格布局信息（供拖拽使用）
+        self._grid_origin = (mx, y + 20)  # 网格起始 y 在 page title 之后
+        self._cell_size = (cell_w + cell_gap, cell_h + cell_gap)
+
         # page title
         page_name = page.get('name', f'第 {self._current_page + 1} 页')
         canvas.create_text(mx + 4, y + 4, text=page_name, fill=c['dim'],
@@ -66,13 +76,29 @@ class LauncherView(BaseView):
                 cx = mx + col * (cell_w + cell_gap)
                 cy = y + row * (cell_h + cell_gap)
 
+                # 拖拽时高亮目标位置
+                is_drag_source = self._drag_active and idx == self._drag_idx
+                is_drag_target = (self._drag_active and idx == getattr(self, '_drag_target', None)
+                                  and idx != self._drag_idx)
+
                 if idx < len(actions) and actions[idx] is not None:
                     action = actions[idx]
-                    self._draw_cell(canvas, cx, cy, cell_w, cell_h, action, idx)
+                    if is_drag_source:
+                        # 被拖拽的格子半透明效果
+                        rrect(canvas, cx, cy, cx + cell_w, cy + cell_h, 8,
+                              fill=c['card2'], outline=c['accent'], tags=f'act_{idx}')
+                        canvas.create_rectangle(cx, cy, cx + cell_w, cy + cell_h,
+                                                fill='', outline='', tags=f'act_{idx}')
+                    else:
+                        if is_drag_target:
+                            rrect(canvas, cx, cy, cx + cell_w, cy + cell_h, 8,
+                                  fill=c['accent_glow'], outline=c['accent'])
+                        self._draw_cell(canvas, cx, cy, cell_w, cell_h, action, idx)
                 else:
-                    # empty slot — tagged to prevent click-through to drag
+                    outline = c['accent'] if is_drag_target else c['border_subtle']
+                    fill = c['accent_glow'] if is_drag_target else c['card']
                     rrect(canvas, cx, cy, cx + cell_w, cy + cell_h, 8,
-                          fill=c['card'], outline=c['border_subtle'], tags='lnch_grid')
+                          fill=fill, outline=outline, tags='lnch_grid')
                     canvas.create_rectangle(cx, cy, cx + cell_w, cy + cell_h,
                                             fill='', outline='', tags='lnch_grid')
 
@@ -172,6 +198,10 @@ class LauncherView(BaseView):
         for tag in tags:
             if tag.startswith('act_'):
                 idx = int(tag[4:])
+                # 记录按下位置，可能开始拖拽
+                self._drag_idx = idx
+                self._drag_start_xy = (event.x, event.y)
+                self._drag_active = False
                 self._execute_action(idx)
                 return True
             if tag == 'lnch_add':
@@ -183,6 +213,79 @@ class LauncherView(BaseView):
                 self._open_search()
                 return True
         return False
+
+    def on_drag(self, canvas: Canvas, event) -> bool:
+        """拖拽中 — 检测是否进入拖拽模式并更新目标"""
+        if self._drag_idx is None or self._drag_start_xy is None:
+            return False
+
+        dx = abs(event.x - self._drag_start_xy[0])
+        dy = abs(event.y - self._drag_start_xy[1])
+
+        # 移动超过 10px 才进入拖拽模式
+        if not self._drag_active and (dx > 10 or dy > 10):
+            self._drag_active = True
+
+        if not self._drag_active:
+            return False
+
+        # 计算鼠标所在的格子索引
+        target = self._pos_to_idx(event.x, event.y)
+        if target != getattr(self, '_drag_target', None):
+            self._drag_target = target
+            self.app._render()
+        return True
+
+    def on_drag_end(self, canvas: Canvas, event) -> bool:
+        """拖拽结束 — 交换动作位置"""
+        if not self._drag_active or self._drag_idx is None:
+            self._drag_idx = None
+            self._drag_start_xy = None
+            self._drag_active = False
+            return False
+
+        target = self._pos_to_idx(event.x, event.y)
+        source = self._drag_idx
+
+        # 重置状态
+        self._drag_idx = None
+        self._drag_start_xy = None
+        self._drag_active = False
+        self._drag_target = None
+
+        if target is not None and target != source:
+            self._swap_actions(source, target)
+
+        self.app._render()
+        return True
+
+    def _pos_to_idx(self, x: int, y: int) -> int | None:
+        """将画布坐标转换为格子索引"""
+        gx, gy = self._grid_origin
+        cw, ch = self._cell_size
+        if cw <= 0 or ch <= 0:
+            return None
+        col = int((x - gx) / cw)
+        row = int((y - gy) / ch)
+        if 0 <= col < self._cols and 0 <= row < self._rows:
+            return row * self._cols + col
+        return None
+
+    def _swap_actions(self, src: int, dst: int):
+        """交换两个动作的位置"""
+        pages = self._pages
+        if self._current_page >= len(pages):
+            return
+        actions = pages[self._current_page].get('actions', [])
+        # 确保列表足够长
+        max_idx = max(src, dst)
+        while len(actions) <= max_idx:
+            actions.append(None)
+        actions[src], actions[dst] = actions[dst], actions[src]
+        # 清理尾部 None
+        while actions and actions[-1] is None:
+            actions.pop()
+        self.app._save_config()
 
     def on_right_click(self, canvas: Canvas, event, tags: list[str]):
         """右键菜单：编辑/删除操作"""

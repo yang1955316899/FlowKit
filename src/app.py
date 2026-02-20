@@ -187,10 +187,18 @@ class App:
             self.wm.drag_start(event)
 
     def _on_drag(self, event):
+        # 先让视图处理拖拽
+        view = self._views.get(self.current_view)
+        if view and view.on_drag(self.canvas, event):
+            return
         if getattr(self, '_dragging', False):
             self.wm.drag(event)
 
     def _on_drag_end(self, event):
+        # 先让视图处理拖拽结束
+        view = self._views.get(self.current_view)
+        if view and view.on_drag_end(self.canvas, event):
+            pass
         if getattr(self, '_dragging', False):
             self._dragging = False
             self.wm.drag_end(event)

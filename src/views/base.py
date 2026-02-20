@@ -26,3 +26,11 @@ class BaseView(ABC):
     def on_scroll(self, event):
         """处理鼠标滚轮事件，子类可选覆盖"""
         pass
+
+    def on_drag(self, canvas: Canvas, event) -> bool:
+        """处理拖拽事件，返回 True 表示已处理"""
+        return False
+
+    def on_drag_end(self, canvas: Canvas, event) -> bool:
+        """处理拖拽结束事件，返回 True 表示已处理"""
+        return False
