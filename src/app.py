@@ -11,6 +11,7 @@ from .core.scheduler import Scheduler
 from .core.actions import ActionExecutor
 from .core.platform_api import PlatformAPIServer
 from .core.tray import SystemTray
+from .core.stats import ActionStats
 from .themes.dark import DARK
 from .utils.http import HttpClient
 from .cards.token_stats import TokenStatsCard
@@ -62,6 +63,10 @@ class App:
         # action executor
         self.executor = ActionExecutor(root=self.root, theme=self.theme)
         self.executor.set_feedback_callback(self._show_toast)
+
+        # usage stats
+        self.stats = ActionStats()
+        self.executor.set_stats(self.stats)
 
         # platform API server for script actions
         self._api_server = PlatformAPIServer(

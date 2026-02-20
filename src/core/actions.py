@@ -18,9 +18,14 @@ class ActionExecutor:
         self._on_feedback = None  # callback(msg) for toast
         self._api_server = None
         self._script_runner = None
+        self._stats = None
 
     def set_feedback_callback(self, cb):
         self._on_feedback = cb
+
+    def set_stats(self, stats):
+        """注入统计实例"""
+        self._stats = stats
 
     def set_api_server(self, server):
         """注入平台 API 服务实例"""
@@ -33,6 +38,9 @@ class ActionExecutor:
         """按 type 分发执行"""
         if not action:
             return
+        # 记录统计
+        if self._stats and action.get('id'):
+            self._stats.record(action['id'])
         t = action.get('type', '')
         handler = {
             'app': self._exec_app,

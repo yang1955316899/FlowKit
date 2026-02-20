@@ -1,5 +1,6 @@
 """设置视图"""
 
+import time
 from tkinter import Canvas, Entry, Frame, Label, Toplevel, StringVar
 from .base import BaseView
 from ..widgets.draw import rrect, pill
@@ -59,6 +60,32 @@ class SettingsView(BaseView):
             active = default == vname
             y = self._draw_radio(canvas, mx, y, cw, view_labels[vname], active,
                                  f'dv_{vname}')
+
+        y += 10
+
+        # section: Stats
+        canvas.create_text(mx + 4, y + 4, text="使用统计", fill=c['dim'],
+                           font=(self._f, 7), anchor='w')
+        y += 20
+
+        stats = self.app.stats
+        total = stats.total_count()
+        y = self._draw_row(canvas, mx, y, cw, "总执行次数",
+                           str(total), 'stats_total')
+
+        # top 5 actions
+        top_list = stats.top(5)
+        if top_list:
+            all_actions = self._get_action_map()
+            for aid, count in top_list:
+                act = all_actions.get(aid)
+                if act:
+                    icon = act.get('icon', '✦')
+                    label = act.get('label', aid)
+                    last_t = stats.get(aid).get('last', 0)
+                    ago = _time_ago(last_t) if last_t else ''
+                    y = self._draw_stat_row(canvas, mx, y, cw,
+                                            f"{icon} {label}", count, ago)
 
         y += 10
         return y
@@ -291,3 +318,39 @@ class SettingsView(BaseView):
         # 热键需要重启才能生效
         self.app._show_toast("重启后生效")
         self.app._render()
+
+    def _get_action_map(self) -> dict[str, dict]:
+        """构建 action_id -> action 的映射"""
+        result = {}
+        pages = self.app.config.get('launcher', {}).get('pages', [])
+        for page in pages:
+            for act in page.get('actions', []):
+                if act and act.get('id'):
+                    result[act['id']] = act
+        return result
+
+    def _draw_stat_row(self, canvas, x, y, w, label, count, ago):
+        c = self.theme
+        h = 28
+        rrect(canvas, x, y, x + w, y + h, 8, fill=c['card'])
+        canvas.create_text(x + 14, y + h // 2, text=label, fill=c['text'],
+                           font=(self._f, 7), anchor='w')
+        # count badge
+        canvas.create_text(x + w - 14, y + h // 2, text=f"{count}次",
+                           fill=c['accent'], font=(self._fm, 7), anchor='e')
+        if ago:
+            canvas.create_text(x + w - 60, y + h // 2, text=ago,
+                               fill=c['dim'], font=(self._f, 6), anchor='e')
+        return y + h + 3
+
+
+def _time_ago(ts: float) -> str:
+    """将时间戳转为 '刚刚'/'x分钟前'/'x小时前'/'x天前' """
+    diff = time.time() - ts
+    if diff < 60:
+        return '刚刚'
+    if diff < 3600:
+        return f'{int(diff / 60)}分钟前'
+    if diff < 86400:
+        return f'{int(diff / 3600)}小时前'
+    return f'{int(diff / 86400)}天前'
