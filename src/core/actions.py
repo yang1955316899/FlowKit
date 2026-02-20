@@ -194,22 +194,31 @@ class ActionExecutor:
         timeout = action.get('timeout', 30)
         show_output = action.get('show_output', True)
 
+        # 基本校验
+        if mode == 'file' and not action.get('path', '').strip():
+            self._feedback("未指定脚本文件!")
+            return
+        if mode == 'inline' and not action.get('code', '').strip():
+            self._feedback("脚本代码为空!")
+            return
+
         if show_output and self._root and self._theme:
             self._root.after(0, self._show_script_output, action)
             return
 
         # 静默执行
-        if mode == 'file':
-            path = action.get('path', '')
-            result = self._script_runner.run_file(path, timeout=timeout)
-        else:
-            code = action.get('code', '')
-            result = self._script_runner.run(code, timeout=timeout)
+        try:
+            if mode == 'file':
+                result = self._script_runner.run_file(action['path'], timeout=timeout)
+            else:
+                result = self._script_runner.run(action['code'], timeout=timeout)
 
-        if result.success:
-            self._feedback("脚本完成!")
-        else:
-            self._feedback("脚本失败!")
+            if result.success:
+                self._feedback("脚本完成!")
+            else:
+                self._feedback("脚本失败!")
+        except Exception:
+            self._feedback("脚本执行异常!")
 
     def _show_script_output(self, action):
         """在输出窗口中运行脚本"""
@@ -221,21 +230,29 @@ class ActionExecutor:
         dlg = ShellOutputDialog(self._root, self._theme, title=title)
 
         def run():
-            def on_output(line):
-                dlg.win.after(0, dlg._append_text, line)
+            try:
+                def on_output(line):
+                    try:
+                        dlg.win.after(0, dlg._append_text, line)
+                    except Exception:
+                        pass
 
-            if mode == 'file':
-                path = action.get('path', '')
-                result = self._script_runner.run_file(path, timeout=timeout,
-                                                       on_output=on_output)
-            else:
-                code = action.get('code', '')
-                result = self._script_runner.run(code, timeout=timeout,
-                                                  on_output=on_output)
+                if mode == 'file':
+                    result = self._script_runner.run_file(
+                        action.get('path', ''), timeout=timeout, on_output=on_output)
+                else:
+                    result = self._script_runner.run(
+                        action.get('code', ''), timeout=timeout, on_output=on_output)
 
-            if result.stderr:
-                dlg.win.after(0, dlg._append_text, f'\n{result.stderr}')
-            dlg.win.after(0, dlg._set_status, result.returncode)
+                if result.stderr:
+                    dlg.win.after(0, dlg._append_text, f'\n{result.stderr}')
+                dlg.win.after(0, dlg._set_status, result.returncode)
+            except Exception as e:
+                try:
+                    dlg.win.after(0, dlg._append_text, f'\n执行异常: {e}\n')
+                    dlg.win.after(0, dlg._set_status, -1)
+                except Exception:
+                    pass
 
         threading.Thread(target=run, daemon=True).start()
 

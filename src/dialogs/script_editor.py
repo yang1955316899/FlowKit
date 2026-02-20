@@ -1,7 +1,6 @@
 """Python 脚本编辑器对话框"""
 
 import re
-import tkinter as tk
 from tkinter import Toplevel, Label, Frame, Canvas, Text, Scrollbar, Entry, StringVar, filedialog
 from ..widgets.draw import rr_points
 
@@ -305,20 +304,30 @@ class ScriptEditorDialog:
         for tag in ('keyword', 'builtin', 'string', 'comment', 'number', 'ctx'):
             self._code.tag_remove(tag, '1.0', 'end')
 
-        # 逐行高亮
-        for i, line in enumerate(code.split('\n'), 1):
-            # 注释
-            cm = line.find('#')
-            if cm >= 0:
-                # 检查 # 不在字符串内（简化处理）
-                self._code.tag_add('comment', f'{i}.{cm}', f'{i}.end')
+        # tag 优先级：string > comment > keyword/builtin/ctx > number
+        self._code.tag_raise('string')
+        self._code.tag_raise('comment')
 
-            # 字符串（简化：匹配引号对）
+        for i, line in enumerate(code.split('\n'), 1):
+            # 先找字符串区域，用于排除误判
+            str_ranges = []
             for m in re.finditer(r'("""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'|"[^"\\]*(?:\\.[^"\\]*)*"|\'[^\'\\]*(?:\\.[^\'\\]*)*\')', line):
                 self._code.tag_add('string', f'{i}.{m.start()}', f'{i}.{m.end()}')
+                str_ranges.append((m.start(), m.end()))
+
+            def in_string(pos):
+                return any(s <= pos < e for s, e in str_ranges)
+
+            # 注释 — 跳过字符串内的 #
+            for j, ch in enumerate(line):
+                if ch == '#' and not in_string(j):
+                    self._code.tag_add('comment', f'{i}.{j}', f'{i}.end')
+                    break
 
             # 关键字和内置函数
             for m in re.finditer(r'\b(\w+)\b', line):
+                if in_string(m.start()):
+                    continue
                 word = m.group(1)
                 if word in _KEYWORDS:
                     self._code.tag_add('keyword', f'{i}.{m.start()}', f'{i}.{m.end()}')
@@ -329,7 +338,8 @@ class ScriptEditorDialog:
 
             # 数字
             for m in re.finditer(r'\b\d+\.?\d*\b', line):
-                self._code.tag_add('number', f'{i}.{m.start()}', f'{i}.{m.end()}')
+                if not in_string(m.start()):
+                    self._code.tag_add('number', f'{i}.{m.start()}', f'{i}.{m.end()}')
 
     def _update_line_numbers(self):
         self._line_nums.configure(state='normal')

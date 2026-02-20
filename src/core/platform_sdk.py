@@ -9,33 +9,54 @@
 import json
 import os
 import socket
+import atexit
 
 
 class _Connection:
-    """与主进程 API 服务的 TCP 长连接"""
+    """与主进程 API 服务的 TCP 长连接，支持断线重连"""
 
     def __init__(self):
         self._sock: socket.socket | None = None
         self._req_id = 0
         self._buf = b''
+        self._port = 0
 
     def _ensure_connected(self):
         if self._sock is not None:
             return
-        port = int(os.environ.get('MONITOR_API_PORT', '0'))
-        if not port:
+        self._port = int(os.environ.get('MONITOR_API_PORT', '0'))
+        if not self._port:
             raise RuntimeError('MONITOR_API_PORT not set — script must be run from monitor')
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._sock.connect(('127.0.0.1', port))
+        self._sock.connect(('127.0.0.1', self._port))
         self._sock.settimeout(60)
+
+    def _reconnect(self):
+        """断线后重新连接"""
+        self.close()
+        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._sock.connect(('127.0.0.1', self._port))
+        self._sock.settimeout(60)
+        self._buf = b''
 
     def call(self, method: str, **params):
         self._ensure_connected()
         self._req_id += 1
         req = {'id': self._req_id, 'method': method, 'params': params}
         data = json.dumps(req, ensure_ascii=False).encode('utf-8') + b'\n'
-        self._sock.sendall(data)
-        # 读取响应
+        try:
+            self._sock.sendall(data)
+            return self._read_response()
+        except (ConnectionError, OSError):
+            # 断线重连一次
+            try:
+                self._reconnect()
+                self._sock.sendall(data)
+                return self._read_response()
+            except Exception:
+                raise
+
+    def _read_response(self):
         while True:
             while b'\n' in self._buf:
                 line, self._buf = self._buf.split(b'\n', 1)
@@ -186,3 +207,6 @@ class Context:
 
 # 全局单例
 ctx = Context()
+
+# 进程退出时关闭连接
+atexit.register(_conn.close)

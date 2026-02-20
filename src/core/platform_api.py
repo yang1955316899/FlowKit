@@ -6,7 +6,6 @@ import threading
 import ctypes
 import ctypes.wintypes
 import os
-import webbrowser
 import subprocess
 import requests as _requests
 from pathlib import Path
@@ -327,22 +326,31 @@ class PlatformAPIServer:
         return True
 
     def _ui_notify(self, title: str = '', msg: str = '') -> bool:
-        # 使用 Windows 10+ toast 通知
+        """桌面右上角通知弹窗"""
         try:
-            from tkinter import Toplevel, Label
+            from tkinter import Toplevel, Label, Frame
+            c = self._theme or {}
+
             def show():
                 n = Toplevel(self._root)
                 n.overrideredirect(True)
                 n.attributes('-topmost', True)
-                n.configure(bg='#1e1e2e')
-                f = Label(n, text=f"{title}\n{msg}", fg='#cdd6f4', bg='#1e1e2e',
-                          font=('Microsoft YaHei UI', 9), padx=16, pady=10, justify='left')
-                f.pack()
+                bg = c.get('card', '#181825')
+                n.configure(bg=c.get('border', '#313147'))
+                inner = Frame(n, bg=bg)
+                inner.pack(fill='both', expand=True, padx=1, pady=1)
+                Label(inner, text=title, fg=c.get('text', '#cdd6f4'), bg=bg,
+                      font=(c.get('font', 'Microsoft YaHei UI'), 9, 'bold'),
+                      anchor='w').pack(fill='x', padx=12, pady=(8, 2))
+                Label(inner, text=msg, fg=c.get('sub', '#a6adc8'), bg=bg,
+                      font=(c.get('font', 'Microsoft YaHei UI'), 8),
+                      anchor='w', wraplength=260).pack(fill='x', padx=12, pady=(0, 8))
                 sw = n.winfo_screenwidth()
                 n.update_idletasks()
                 nw = n.winfo_reqwidth()
                 n.geometry(f"+{sw - nw - 20}+40")
                 n.after(3000, n.destroy)
+
             if self._root:
                 self._root.after(0, show)
         except Exception:
@@ -525,8 +533,13 @@ class PlatformAPIServer:
                 lbl.pack(fill='x', padx=16, pady=1)
                 lbl.bind('<Enter>', lambda e, l=lbl: l.configure(bg=accent, fg='#1e1e2e'))
                 lbl.bind('<Leave>', lambda e, l=lbl: l.configure(bg=card, fg=text))
-                lbl.bind('<Button-1>', lambda e, o=opt: (
-                    result.__setitem__(0, o), event.set(), dlg.destroy()))
+
+                def on_select(e, o=opt):
+                    result[0] = o
+                    event.set()
+                    dlg.destroy()
+
+                lbl.bind('<Button-1>', on_select)
 
             Frame(inner, bg=bg, height=8).pack()
 
