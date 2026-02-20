@@ -7,7 +7,7 @@ from tkinter import Toplevel, Label, Frame, Canvas, Text, Scrollbar
 
 class ShellOutputDialog:
 
-    def __init__(self, parent, theme: dict, title: str = "Output", command: str = "",
+    def __init__(self, parent, theme: dict, title: str = "输出", command: str = "",
                  shell_type: str = "cmd"):
         self.theme = theme
         self._f = theme['font']
@@ -67,7 +67,7 @@ class ShellOutputDialog:
         self._text.pack(side='left', fill='both', expand=True)
 
         # status bar
-        self._status = Label(inner, text="Running...", fg=theme['yellow'],
+        self._status = Label(inner, text="运行中...", fg=theme['yellow'],
                              bg=theme['bg'], font=(self._fm, 7), anchor='w')
         self._status.pack(fill='x', padx=12, pady=(0, 6))
 
@@ -108,7 +108,7 @@ class ShellOutputDialog:
                 code = self._process.returncode
                 self.win.after(0, self._set_status, code)
             except Exception as e:
-                self.win.after(0, self._append_text, f"\nError: {e}\n")
+                self.win.after(0, self._append_text, f"\n错误: {e}\n")
                 self.win.after(0, self._set_status, -1)
 
         threading.Thread(target=run, daemon=True).start()
@@ -126,9 +126,9 @@ class ShellOutputDialog:
         try:
             c = self.theme
             if code == 0:
-                self._status.configure(text="Done (exit 0)", fg=c['green'])
+                self._status.configure(text="完成 (退出码 0)", fg=c['green'])
             else:
-                self._status.configure(text=f"Exit code: {code}", fg=c['red'])
+                self._status.configure(text=f"退出码: {code}", fg=c['red'])
         except Exception:
             pass
 

@@ -34,7 +34,7 @@ class App:
         if not self.tokens:
             cred = api_cfg.get('credential', '')
             if cred:
-                self.tokens = [{'name': 'Default', 'credential': cred}]
+                self.tokens = [{'name': '默认', 'credential': cred}]
         self.current_token_idx = 0
 
         # launcher config
@@ -72,7 +72,7 @@ class App:
 
         self._copy_toast = None
         self._copy_toast_visible = False
-        self._toast_text = "Copied!"
+        self._toast_text = "已复制!"
 
     # ── views ──
 
@@ -107,7 +107,7 @@ class App:
     def _setup_window(self):
         cfg = self.config.get('window', {})
         w = cfg.get('width', 360)
-        self.root.title('Monitor')
+        self.root.title('监控台')
         self.root.overrideredirect(True)
         self.root.attributes('-topmost', True)
         self.root.attributes('-alpha', cfg.get('opacity', 0.92))
@@ -255,7 +255,7 @@ class App:
     def _hide_copy_toast(self):
         self._copy_toast_visible = False; self._copy_toast = None; self._render()
 
-    def _show_toast(self, msg: str = "Done!"):
+    def _show_toast(self, msg: str = "完成!"):
         """通用 toast 反馈"""
         if self._copy_toast: self.root.after_cancel(self._copy_toast)
         self._toast_text = msg
@@ -342,7 +342,7 @@ class App:
 
         # title with accent dot
         cv.create_oval(12, 14, 18, 20, fill=c['accent'], outline='')
-        cv.create_text(24, 17, text="Monitor", fill=c['text'],
+        cv.create_text(24, 17, text="监控台", fill=c['text'],
                       font=(f, 10, 'bold'), anchor='w')
 
         # right-side buttons

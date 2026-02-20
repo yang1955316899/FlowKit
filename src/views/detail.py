@@ -52,7 +52,7 @@ class DetailView(BaseView):
 
         # toast
         if app._copy_toast_visible:
-            msg = getattr(app, '_toast_text', 'Copied!')
+            msg = getattr(app, '_toast_text', '已复制!')
             tw = max(70, len(msg) * 8 + 20)
             tx = (w - tw) // 2
             pill(canvas, tx, y+2, tx+tw, y+20, fill=c['green_glow'])

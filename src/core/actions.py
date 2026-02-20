@@ -61,7 +61,7 @@ class ActionExecutor:
                 else:
                     os.startfile(target)
         except Exception:
-            self._feedback("Failed!")
+            self._feedback("失败!")
 
     def _exec_file(self, action: dict):
         """打开文件"""
@@ -70,7 +70,7 @@ class ActionExecutor:
             try:
                 os.startfile(target)
             except Exception:
-                self._feedback("Failed!")
+                self._feedback("失败!")
 
     def _exec_folder(self, action: dict):
         """打开文件夹"""
@@ -79,7 +79,7 @@ class ActionExecutor:
             try:
                 os.startfile(target)
             except Exception:
-                self._feedback("Failed!")
+                self._feedback("失败!")
 
     def _exec_url(self, action: dict):
         """打开 URL"""
@@ -141,7 +141,7 @@ class ActionExecutor:
                 user32.SetClipboardData(CF_UNICODETEXT, h)
         finally:
             user32.CloseClipboard()
-        self._feedback("Copied!")
+        self._feedback("已复制!")
 
     def _exec_keys(self, action: dict):
         """模拟按键"""
@@ -150,7 +150,7 @@ class ActionExecutor:
             return
         keys = _parse_keys(target)
         _send_keys(keys)
-        self._feedback("Sent!")
+        self._feedback("已发送!")
 
     def _exec_combo(self, action: dict):
         """顺序执行组合动作"""

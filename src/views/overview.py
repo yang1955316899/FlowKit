@@ -109,7 +109,7 @@ class OverviewView(BaseView):
 
         # add button
         rrect(canvas, mx, y, mx+cw, y+36, 10, fill='', outline=c['border_subtle'])
-        canvas.create_text(mx+cw//2, y+18, text="+  Add Token", fill=c['dim'],
+        canvas.create_text(mx+cw//2, y+18, text="+  添加 Token", fill=c['dim'],
                            font=(f, 8), tags='ov_add')
         canvas.create_rectangle(mx, y, mx+cw, y+36, fill='', outline='', tags='ov_add')
         y += 44
@@ -122,21 +122,21 @@ class OverviewView(BaseView):
         name = tok.get('name', f'Token {idx+1}')
 
         rrect(canvas, mx, y, mx+cw, y+44, 10, fill=c['red_glow'])
-        canvas.create_text(mx+16, y+15, text=f"Delete {name}?", fill=c['red'],
+        canvas.create_text(mx+16, y+15, text=f"删除 {name}?", fill=c['red'],
                            font=(self._f, 8, 'bold'), anchor='w')
 
         bx = mx + cw - 14
         # Cancel
         cw2 = 50
         pill(canvas, bx-cw2, y+26, bx, y+40, fill=c['card2'])
-        canvas.create_text(bx-cw2//2, y+33, text="Cancel", fill=c['dim'],
+        canvas.create_text(bx-cw2//2, y+33, text="取消", fill=c['dim'],
                            font=(self._fm, 7), tags='ov_no')
         canvas.create_rectangle(bx-cw2, y+26, bx, y+40, fill='', outline='', tags='ov_no')
         bx -= cw2 + 6
         # OK
         ow = 36
         pill(canvas, bx-ow, y+26, bx, y+40, fill=c['red'])
-        canvas.create_text(bx-ow//2, y+33, text="OK", fill='#fff',
+        canvas.create_text(bx-ow//2, y+33, text="确定", fill='#fff',
                            font=(self._fm, 7, 'bold'), tags=f'ov_ok_{idx}')
         canvas.create_rectangle(bx-ow, y+26, bx, y+40, fill='', outline='', tags=f'ov_ok_{idx}')
 

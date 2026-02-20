@@ -39,7 +39,7 @@ class LauncherView(BaseView):
         cell_h = 52
 
         # page title
-        page_name = page.get('name', f'Page {self._current_page + 1}')
+        page_name = page.get('name', f'第 {self._current_page + 1} 页')
         canvas.create_text(mx + 4, y + 4, text=page_name, fill=c['dim'],
                            font=(self._f, 7), anchor='w')
         y += 20
@@ -70,7 +70,7 @@ class LauncherView(BaseView):
 
         # toast
         if self.app._copy_toast_visible:
-            msg = getattr(self.app, '_toast_text', 'Done!')
+            msg = getattr(self.app, '_toast_text', '完成!')
             tw = max(70, len(msg) * 8 + 20)
             tx = (w - tw) // 2
             pill(canvas, tx, y+2, tx+tw, y+20, fill=c['green_glow'])
@@ -95,7 +95,20 @@ class LauncherView(BaseView):
         # label
         label = action.get('label', '')
         if label:
-            short = label[:6] + '..' if len(label) > 7 else label
+            # CJK chars are ~2x width, so calculate visual length
+            vlen = sum(2 if ord(ch) > 0x2e80 else 1 for ch in label)
+            if vlen > 10:
+                # truncate to ~10 visual units
+                short, vl = '', 0
+                for ch in label:
+                    cw_ = 2 if ord(ch) > 0x2e80 else 1
+                    if vl + cw_ > 8:
+                        short += '..'
+                        break
+                    short += ch
+                    vl += cw_
+            else:
+                short = label
             canvas.create_text(x + w // 2, y + h - 8, text=short,
                                fill=c['dim'], font=(self._f, 6), tags=tag)
 
@@ -127,13 +140,13 @@ class LauncherView(BaseView):
         rrect(canvas, mx, y, mx + cw, y + 80, 10, fill=c['card'])
         canvas.create_text(mx + cw // 2, y + 30, text="\u229E",
                            fill=c['dim'], font=(self._f, 18))
-        canvas.create_text(mx + cw // 2, y + 55, text="Right-click to add actions",
+        canvas.create_text(mx + cw // 2, y + 55, text="右键添加操作",
                            fill=c['dim'], font=(self._f, 8))
 
         # add button
         y += 90
         rrect(canvas, mx, y, mx + cw, y + 36, 10, fill='', outline=c['border_subtle'])
-        canvas.create_text(mx + cw // 2, y + 18, text="+  Add Action",
+        canvas.create_text(mx + cw // 2, y + 18, text="+  添加操作",
                            fill=c['dim'], font=(self._f, 8), tags='lnch_add')
         canvas.create_rectangle(mx, y, mx + cw, y + 36, fill='', outline='', tags='lnch_add')
         y += 44
@@ -168,15 +181,15 @@ class LauncherView(BaseView):
                     font=(self._f, 9))
 
         if action_idx is not None:
-            menu.add_command(label="Edit", command=lambda: self._edit_action(action_idx))
-            menu.add_command(label="Delete", command=lambda: self._delete_action(action_idx))
+            menu.add_command(label="编辑", command=lambda: self._edit_action(action_idx))
+            menu.add_command(label="删除", command=lambda: self._delete_action(action_idx))
             menu.add_separator()
 
-        menu.add_command(label="Add Action", command=self._add_action)
+        menu.add_command(label="添加操作", command=self._add_action)
         menu.add_separator()
-        menu.add_command(label="Add Page", command=self._add_page)
+        menu.add_command(label="添加页面", command=self._add_page)
         if len(self._pages) > 1:
-            menu.add_command(label="Delete Page", command=self._delete_page)
+            menu.add_command(label="删除页面", command=self._delete_page)
 
         menu.tk_popup(event.x_root, event.y_root)
 
@@ -250,7 +263,7 @@ class LauncherView(BaseView):
 
     def _add_page(self):
         pages = self.app.config.setdefault('launcher', {}).setdefault('pages', [])
-        pages.append({'name': f'Page {len(pages) + 1}', 'actions': []})
+        pages.append({'name': f'第 {len(pages) + 1} 页', 'actions': []})
         self._current_page = len(pages) - 1
         self.app._save_config()
         self.app._render()
@@ -270,5 +283,5 @@ class LauncherView(BaseView):
         launcher = self.app.config.setdefault('launcher', {})
         pages = launcher.setdefault('pages', [])
         if not pages:
-            pages.append({'name': 'Tools', 'actions': []})
+            pages.append({'name': '工具', 'actions': []})
             self._current_page = 0

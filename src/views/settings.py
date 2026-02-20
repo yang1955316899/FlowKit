@@ -20,43 +20,44 @@ class SettingsView(BaseView):
         window_cfg = cfg.get('window', {})
 
         # section: Window
-        canvas.create_text(mx + 4, y + 4, text="Window", fill=c['dim'],
+        canvas.create_text(mx + 4, y + 4, text="窗口", fill=c['dim'],
                            font=(self._f, 7), anchor='w')
         y += 20
 
-        y = self._draw_row(canvas, mx, y, cw, "Opacity",
+        y = self._draw_row(canvas, mx, y, cw, "透明度",
                            f"{window_cfg.get('opacity', 0.92)}", 'set_opacity')
-        y = self._draw_row(canvas, mx, y, cw, "Width",
+        y = self._draw_row(canvas, mx, y, cw, "宽度",
                            f"{window_cfg.get('width', 360)}px", 'set_width')
 
         y += 8
 
         # section: Launcher
-        canvas.create_text(mx + 4, y + 4, text="Launcher", fill=c['dim'],
+        canvas.create_text(mx + 4, y + 4, text="启动器", fill=c['dim'],
                            font=(self._f, 7), anchor='w')
         y += 20
 
         grid = launcher_cfg.get('grid', [4, 7])
-        y = self._draw_row(canvas, mx, y, cw, "Grid",
+        y = self._draw_row(canvas, mx, y, cw, "网格",
                            f"{grid[0]} x {grid[1]}", 'set_grid')
-        y = self._draw_row(canvas, mx, y, cw, "Hotkey",
+        y = self._draw_row(canvas, mx, y, cw, "热键",
                            launcher_cfg.get('hotkey', 'ctrl+space'), 'set_hotkey')
 
         # middle click toggle
         mc = launcher_cfg.get('middle_click', True)
-        y = self._draw_toggle(canvas, mx, y, cw, "Middle Click", mc, 'tog_middle')
+        y = self._draw_toggle(canvas, mx, y, cw, "鼠标中键", mc, 'tog_middle')
 
         y += 8
 
         # section: Default View
-        canvas.create_text(mx + 4, y + 4, text="Default View", fill=c['dim'],
+        canvas.create_text(mx + 4, y + 4, text="默认视图", fill=c['dim'],
                            font=(self._f, 7), anchor='w')
         y += 20
 
         default = launcher_cfg.get('default_view', 'launcher')
+        view_labels = {'launcher': '启动器', 'detail': '详情', 'overview': '总览'}
         for vname in ['launcher', 'detail', 'overview']:
             active = default == vname
-            y = self._draw_radio(canvas, mx, y, cw, vname.capitalize(), active,
+            y = self._draw_radio(canvas, mx, y, cw, view_labels[vname], active,
                                  f'dv_{vname}')
 
         y += 10
@@ -124,12 +125,12 @@ class SettingsView(BaseView):
                 self._set_default_view(tag[3:])
                 return True
             if tag == 'set_opacity':
-                self._edit_value("Opacity (0.5-1.0)", 'opacity',
+                self._edit_value("透明度 (0.5-1.0)", 'opacity',
                                  self.app.config.get('window', {}).get('opacity', 0.92),
                                  self._apply_opacity)
                 return True
             if tag == 'set_width':
-                self._edit_value("Width (300-600)", 'width',
+                self._edit_value("宽度 (300-600)", 'width',
                                  self.app.config.get('window', {}).get('width', 360),
                                  self._apply_width)
                 return True
@@ -137,7 +138,7 @@ class SettingsView(BaseView):
                 self._edit_grid()
                 return True
             if tag == 'set_hotkey':
-                self._edit_value("Hotkey (e.g. ctrl+space)", 'hotkey',
+                self._edit_value("热键 (如 ctrl+space)", 'hotkey',
                                  self.app.config.get('launcher', {}).get('hotkey', 'ctrl+space'),
                                  self._apply_hotkey)
                 return True
@@ -208,7 +209,7 @@ class SettingsView(BaseView):
         inner = Frame(dlg, bg=c['bg'])
         inner.pack(fill='both', expand=True, padx=1, pady=1)
 
-        Label(inner, text="Grid (cols x rows)", fg=c['sub'], bg=c['bg'],
+        Label(inner, text="网格 (列 x 行)", fg=c['sub'], bg=c['bg'],
               font=(self._f, 8)).pack(padx=12, pady=(10, 6))
 
         row = Frame(inner, bg=c['bg'])
@@ -288,5 +289,5 @@ class SettingsView(BaseView):
         launcher['hotkey'] = val
         self.app._save_config()
         # 热键需要重启才能生效
-        self.app._show_toast("Restart to apply")
+        self.app._show_toast("重启后生效")
         self.app._render()

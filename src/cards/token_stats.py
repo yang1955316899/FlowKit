@@ -28,8 +28,8 @@ class TokenStatsCard(BaseCard):
         cy = y
         cy = self._header(canvas, x, cy, w, data)
         cy = self._cost(canvas, x, cy, w, data)
-        cy = self._tokens_row(canvas, x, cy, w, data, 'today', 'Today')
-        cy = self._tokens_row(canvas, x, cy, w, data, 'total', 'Total')
+        cy = self._tokens_row(canvas, x, cy, w, data, 'today', '今日')
+        cy = self._tokens_row(canvas, x, cy, w, data, 'total', '累计')
         cy = self._chart(canvas, x, cy, w, data)
         cy = self._recent(canvas, x, cy, w, data)
         return cy - y
@@ -75,14 +75,14 @@ class TokenStatsCard(BaseCard):
         # left card — Today Cost
         lw = hw - gap // 2
         self._rrect(cv, x, y, x+lw, y+56, 8, fill=c['card'])
-        cv.create_text(x+lw//2, y+16, text="Today Cost", fill=c['dim'], font=(self._f, 7))
+        cv.create_text(x+lw//2, y+16, text="今日消费", fill=c['dim'], font=(self._f, 7))
         cv.create_text(x+lw//2, y+38, text=cost, fill=c['accent'], font=(self._fm, 15, 'bold'))
 
         # right card — Requests
         rx = x + hw + gap // 2
         rw = w - hw - gap // 2
         self._rrect(cv, rx, y, rx+rw, y+56, 8, fill=c['card'])
-        cv.create_text(rx+rw//2, y+16, text="Requests", fill=c['dim'], font=(self._f, 7))
+        cv.create_text(rx+rw//2, y+16, text="请求数", fill=c['dim'], font=(self._f, 7))
         cv.create_text(rx+rw//2, y+38, text=str(count), fill=c['accent2'], font=(self._fm, 15, 'bold'))
 
         return y + 62
@@ -101,9 +101,9 @@ class TokenStatsCard(BaseCard):
         cw = (w - gap * 2) // 3
 
         items = [
-            ("In", section.get('inputTokensFormatted', '0'), c['green']),
-            ("Out", section.get('outputTokensFormatted', '0'), c['peach']),
-            ("Cache", section.get('cacheReadTokensFormatted', '0'), c['accent']),
+            ("输入", section.get('inputTokensFormatted', '0'), c['green']),
+            ("输出", section.get('outputTokensFormatted', '0'), c['peach']),
+            ("缓存", section.get('cacheReadTokensFormatted', '0'), c['accent']),
         ]
         for i, (lbl, val, color) in enumerate(items):
             bx = x + i * (cw + gap)
@@ -116,7 +116,7 @@ class TokenStatsCard(BaseCard):
         c = self.theme
         details = data.get('details', [])
 
-        cv.create_text(x+4, y+6, text="Hourly", fill=c['dim'], font=(self._f, 7), anchor='w')
+        cv.create_text(x+4, y+6, text="每小时", fill=c['dim'], font=(self._f, 7), anchor='w')
         y += 18
         h = 108
 
@@ -137,7 +137,7 @@ class TokenStatsCard(BaseCard):
         self._rrect(cv, x, y, x+w, y+h, 8, fill=c['card'])
 
         if not hourly:
-            cv.create_text(x+w//2, y+h//2, text="No data", fill=c['dim'], font=(self._fm, 8))
+            cv.create_text(x+w//2, y+h//2, text="暂无数据", fill=c['dim'], font=(self._fm, 8))
             return y + h + 6
 
         hours = sorted(hourly.keys())
@@ -173,10 +173,10 @@ class TokenStatsCard(BaseCard):
         # legend
         ly = y + 7
         lx = x + w - 10
-        for lbl, k in [('CR', 'cr'), ('CW', 'cc'), ('Out', 'o'), ('In', 'i')]:
+        for lbl, k in [('缓读', 'cr'), ('缓写', 'cc'), ('输出', 'o'), ('输入', 'i')]:
             cv.create_rectangle(lx - 5, ly, lx, ly + 5, fill=colors[k], outline='')
             cv.create_text(lx - 8, ly + 2, text=lbl, fill=c['dim'], font=(self._fm, 6), anchor='e')
-            lx -= 32
+            lx -= 38
 
         return y + h + 6
 
@@ -189,11 +189,11 @@ class TokenStatsCard(BaseCard):
         c = self.theme
         details = data.get('details', [])[:5]
 
-        cv.create_text(x+4, y+6, text="Recent", fill=c['dim'], font=(self._f, 7), anchor='w')
+        cv.create_text(x+4, y+6, text="最近请求", fill=c['dim'], font=(self._f, 7), anchor='w')
         y += 18
 
         if not details:
-            cv.create_text(x+w//2, y+14, text="No data", fill=c['dim'], font=(self._fm, 8))
+            cv.create_text(x+w//2, y+14, text="暂无数据", fill=c['dim'], font=(self._fm, 8))
             return y + 30
 
         rh = 24

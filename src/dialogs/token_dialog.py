@@ -31,7 +31,7 @@ class TokenDialog:
         dot.pack(side='left', padx=(12, 0), pady=0)
         dot.create_oval(0, 0, 8, 8, fill=theme['accent'], outline='')
 
-        title = "Edit Token" if token else "Add Token"
+        title = "编辑 Token" if token else "添加 Token"
         Label(tb, text=title, fg=theme['sub'], bg=theme['card'],
               font=(self._f, 8, 'bold')).pack(side='left', padx=(6, 0))
 
@@ -50,7 +50,7 @@ class TokenDialog:
         fm.pack(fill='both', expand=True, padx=16, pady=(12, 14))
 
         # Name
-        Label(fm, text="NAME", fg=theme['dim'], bg=theme['bg'],
+        Label(fm, text="名称", fg=theme['dim'], bg=theme['bg'],
               font=(self._fm, 7)).pack(anchor='w', pady=(0, 4))
         self.name_e = Entry(fm, bg=theme['card'], fg=theme['text'],
                            insertbackground=theme['accent'], relief='flat',
@@ -60,7 +60,7 @@ class TokenDialog:
         self.name_e.pack(fill='x', ipady=5)
 
         # Credential
-        Label(fm, text="CREDENTIAL", fg=theme['dim'], bg=theme['bg'],
+        Label(fm, text="凭证", fg=theme['dim'], bg=theme['bg'],
               font=(self._fm, 7)).pack(anchor='w', pady=(12, 4))
         self.cred_e = Entry(fm, bg=theme['card'], fg=theme['text'],
                            insertbackground=theme['accent'], relief='flat',
@@ -70,7 +70,7 @@ class TokenDialog:
         self.cred_e.pack(fill='x', ipady=5)
 
         # Daily Limit
-        Label(fm, text="DAILY LIMIT ($)", fg=theme['dim'], bg=theme['bg'],
+        Label(fm, text="每日限额 ($)", fg=theme['dim'], bg=theme['bg'],
               font=(self._fm, 7)).pack(anchor='w', pady=(12, 4))
         self.limit_e = Entry(fm, bg=theme['card'], fg=theme['text'],
                             insertbackground=theme['accent'], relief='flat',
@@ -94,7 +94,7 @@ class TokenDialog:
         sc.pack(side='right')
         pts = rr_points(0, 0, 60, 28, 14)
         sc.create_polygon(pts, fill=theme['accent'], outline='')
-        sc.create_text(30, 14, text="Save", fill='#1e1e2e', font=(self._f, 8, 'bold'))
+        sc.create_text(30, 14, text="保存", fill='#1e1e2e', font=(self._f, 8, 'bold'))
         sc.bind('<Button-1>', lambda e: self._save())
 
         # Cancel button
@@ -102,7 +102,7 @@ class TokenDialog:
         cc.pack(side='right', padx=(0, 8))
         pts2 = rr_points(0, 0, 60, 28, 14)
         cc.create_polygon(pts2, fill='', outline=theme['border'])
-        cc.create_text(30, 14, text="Cancel", fill=theme['dim'], font=(self._f, 8))
+        cc.create_text(30, 14, text="取消", fill=theme['dim'], font=(self._f, 8))
         cc.bind('<Button-1>', lambda e: self.win.destroy())
 
         self.win.bind('<Return>', lambda e: self._save())

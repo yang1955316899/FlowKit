@@ -32,7 +32,7 @@ class ComboEditor:
         dot.pack(side='left', padx=(12, 0))
         dot.create_oval(0, 0, 8, 8, fill=theme['accent'], outline='')
 
-        Label(tb, text="Combo Editor", fg=theme['sub'], bg=theme['card'],
+        Label(tb, text="组合编辑器", fg=theme['sub'], bg=theme['card'],
               font=(self._f, 8, 'bold')).pack(side='left', padx=(6, 0))
 
         cl = Label(tb, text="\u00D7", fg=theme['dim'], bg=theme['card'],
@@ -51,7 +51,7 @@ class ComboEditor:
         # delay
         delay_frame = Frame(self._content, bg=theme['bg'])
         delay_frame.pack(fill='x', pady=(0, 8))
-        Label(delay_frame, text="DELAY (ms)", fg=theme['dim'], bg=theme['bg'],
+        Label(delay_frame, text="延迟 (ms)", fg=theme['dim'], bg=theme['bg'],
               font=(self._fm, 7)).pack(side='left')
         self._delay_entry = Entry(delay_frame, bg=theme['card'], fg=theme['text'],
                                    insertbackground=theme['accent'], relief='flat',
@@ -70,7 +70,7 @@ class ComboEditor:
         # add step button
         add_frame = Frame(self._content, bg=theme['bg'])
         add_frame.pack(fill='x', pady=(8, 0))
-        add_btn = Label(add_frame, text="+ Add Step", fg=theme['accent'],
+        add_btn = Label(add_frame, text="+ 添加步骤", fg=theme['accent'],
                         bg=theme['card2'], font=(self._f, 8), cursor='hand2',
                         padx=10, pady=4)
         add_btn.pack(fill='x')
@@ -84,14 +84,14 @@ class ComboEditor:
         sc.pack(side='right')
         pts = rr_points(0, 0, 60, 28, 14)
         sc.create_polygon(pts, fill=theme['accent'], outline='')
-        sc.create_text(30, 14, text="Save", fill='#1e1e2e', font=(self._f, 8, 'bold'))
+        sc.create_text(30, 14, text="保存", fill='#1e1e2e', font=(self._f, 8, 'bold'))
         sc.bind('<Button-1>', lambda e: self._save())
 
         cc = Canvas(bf, width=60, height=28, bg=theme['bg'], highlightthickness=0, cursor='hand2')
         cc.pack(side='right', padx=(0, 8))
         pts2 = rr_points(0, 0, 60, 28, 14)
         cc.create_polygon(pts2, fill='', outline=theme['border'])
-        cc.create_text(30, 14, text="Cancel", fill=theme['dim'], font=(self._f, 8))
+        cc.create_text(30, 14, text="取消", fill=theme['dim'], font=(self._f, 8))
         cc.bind('<Button-1>', lambda e: self.win.destroy())
 
         self.win.bind('<Escape>', lambda e: self.win.destroy())

@@ -6,26 +6,26 @@ from ..utils.icons import ICON_CATEGORIES
 
 
 ACTION_TYPES = [
-    ('app', 'App'),
-    ('file', 'File'),
-    ('folder', 'Folder'),
-    ('url', 'URL'),
-    ('shell', 'Shell'),
-    ('snippet', 'Text'),
-    ('keys', 'Keys'),
-    ('combo', 'Combo'),
+    ('app', '应用'),
+    ('file', '文件'),
+    ('folder', '文件夹'),
+    ('url', '网址'),
+    ('shell', '脚本'),
+    ('snippet', '文本'),
+    ('keys', '按键'),
+    ('combo', '组合'),
 ]
 
 # target 字段的标签随类型变化
 TARGET_LABELS = {
-    'app': 'PATH',
-    'file': 'FILE PATH',
-    'folder': 'FOLDER PATH',
-    'url': 'URL',
-    'shell': 'COMMAND',
-    'snippet': 'TEXT TO COPY',
-    'keys': 'KEY COMBO  (e.g. ctrl+shift+a)',
-    'combo': 'DESCRIPTION',
+    'app': '程序路径',
+    'file': '文件路径',
+    'folder': '文件夹路径',
+    'url': '网址',
+    'shell': '命令',
+    'snippet': '要复制的文本',
+    'keys': '按键组合 (如 ctrl+shift+a)',
+    'combo': '描述',
 }
 
 
@@ -57,7 +57,7 @@ class ActionDialog:
         dot.pack(side='left', padx=(12, 0))
         dot.create_oval(0, 0, 8, 8, fill=theme['accent'], outline='')
 
-        title = "Edit Action" if action else "Add Action"
+        title = "编辑操作" if action else "添加操作"
         Label(tb, text=title, fg=theme['sub'], bg=theme['card'],
               font=(self._f, 8, 'bold')).pack(side='left', padx=(6, 0))
 
@@ -93,14 +93,14 @@ class ActionDialog:
         self._entries = {}
 
         # Label field (always visible)
-        Label(self._fields_frame, text="LABEL", fg=theme['dim'], bg=theme['bg'],
+        Label(self._fields_frame, text="标签", fg=theme['dim'], bg=theme['bg'],
               font=(self._fm, 7)).pack(anchor='w', pady=(0, 4))
         self._entries['label'] = self._make_entry(self._fields_frame)
         if action:
             self._entries['label'].insert(0, action.get('label', ''))
 
         # Target field (always visible, label changes per type)
-        self._target_label = Label(self._fields_frame, text="TARGET", fg=theme['dim'],
+        self._target_label = Label(self._fields_frame, text="目标", fg=theme['dim'],
                                     bg=theme['bg'], font=(self._fm, 7))
         self._target_label.pack(anchor='w', pady=(8, 4))
         self._entries['target'] = self._make_entry(self._fields_frame)
@@ -109,7 +109,7 @@ class ActionDialog:
 
         # Args field (app only)
         self._args_frame = Frame(self._fields_frame, bg=theme['bg'])
-        Label(self._args_frame, text="ARGS", fg=theme['dim'], bg=theme['bg'],
+        Label(self._args_frame, text="参数", fg=theme['dim'], bg=theme['bg'],
               font=(self._fm, 7)).pack(anchor='w', pady=(0, 4))
         self._entries['args'] = self._make_entry(self._args_frame)
         if action:
@@ -118,14 +118,14 @@ class ActionDialog:
         # Admin toggle (app only)
         self._admin_var = StringVar(value='1' if action and action.get('admin') else '0')
         self._admin_frame = Frame(self._fields_frame, bg=theme['bg'])
-        self._admin_label = Label(self._admin_frame, text="☐ Run as Admin", fg=theme['dim'],
+        self._admin_label = Label(self._admin_frame, text="☐ 以管理员运行", fg=theme['dim'],
                                    bg=theme['bg'], font=(self._fm, 7), cursor='hand2')
         self._admin_label.pack(anchor='w')
         self._admin_label.bind('<Button-1>', self._toggle_admin)
 
         # Shell type (shell only)
         self._shell_frame = Frame(self._fields_frame, bg=theme['bg'])
-        Label(self._shell_frame, text="SHELL TYPE", fg=theme['dim'], bg=theme['bg'],
+        Label(self._shell_frame, text="脚本类型", fg=theme['dim'], bg=theme['bg'],
               font=(self._fm, 7)).pack(anchor='w', pady=(0, 4))
         self._shell_type_var = StringVar(value=action.get('shell_type', 'cmd') if action else 'cmd')
         shell_opts = Frame(self._shell_frame, bg=theme['bg'])
@@ -142,7 +142,7 @@ class ActionDialog:
         self._show_output_var = StringVar(
             value='1' if action and action.get('show_output') else '0')
         self._output_frame = Frame(self._fields_frame, bg=theme['bg'])
-        self._output_label = Label(self._output_frame, text="☐ Show Output",
+        self._output_label = Label(self._output_frame, text="☐ 显示输出",
                                     fg=theme['dim'], bg=theme['bg'],
                                     font=(self._fm, 7), cursor='hand2')
         self._output_label.pack(anchor='w')
@@ -152,12 +152,12 @@ class ActionDialog:
         self._combo_frame = Frame(self._fields_frame, bg=theme['bg'])
         self._combo_steps = list(action.get('steps', [])) if action else []
         self._combo_delay = action.get('delay', 500) if action else 500
-        combo_btn = Label(self._combo_frame, text="Edit Steps...", fg=theme['accent'],
+        combo_btn = Label(self._combo_frame, text="编辑步骤...", fg=theme['accent'],
                           bg=theme['card2'], font=(self._f, 8), cursor='hand2',
                           padx=10, pady=4)
         combo_btn.pack(fill='x')
         combo_btn.bind('<Button-1>', lambda e: self._edit_combo())
-        self._combo_info = Label(self._combo_frame, text=f"{len(self._combo_steps)} steps",
+        self._combo_info = Label(self._combo_frame, text=f"{len(self._combo_steps)} 个步骤",
                                   fg=theme['dim'], bg=theme['bg'], font=(self._fm, 7))
         self._combo_info.pack(anchor='w', pady=(4, 0))
 
@@ -165,7 +165,7 @@ class ActionDialog:
         self._icon_var = StringVar(value=action.get('icon', '\u2726') if action else '\u2726')
         icon_frame = Frame(self._form, bg=theme['bg'])
         icon_frame.pack(fill='x', pady=(8, 0))
-        Label(icon_frame, text="ICON", fg=theme['dim'], bg=theme['bg'],
+        Label(icon_frame, text="图标", fg=theme['dim'], bg=theme['bg'],
               font=(self._fm, 7)).pack(side='left')
         self._icon_display = Label(icon_frame, text=self._icon_var.get(),
                                     font=('Segoe UI Emoji', 14),
@@ -181,14 +181,14 @@ class ActionDialog:
         sc.pack(side='right')
         pts = rr_points(0, 0, 60, 28, 14)
         sc.create_polygon(pts, fill=theme['accent'], outline='')
-        sc.create_text(30, 14, text="Save", fill='#1e1e2e', font=(self._f, 8, 'bold'))
+        sc.create_text(30, 14, text="保存", fill='#1e1e2e', font=(self._f, 8, 'bold'))
         sc.bind('<Button-1>', lambda e: self._save())
 
         cc = Canvas(bf, width=60, height=28, bg=theme['bg'], highlightthickness=0, cursor='hand2')
         cc.pack(side='right', padx=(0, 8))
         pts2 = rr_points(0, 0, 60, 28, 14)
         cc.create_polygon(pts2, fill='', outline=theme['border'])
-        cc.create_text(30, 14, text="Cancel", fill=theme['dim'], font=(self._f, 8))
+        cc.create_text(30, 14, text="取消", fill=theme['dim'], font=(self._f, 8))
         cc.bind('<Button-1>', lambda e: self.win.destroy())
 
         self.win.bind('<Return>', lambda e: self._save())
@@ -240,7 +240,7 @@ class ActionDialog:
         t = self._action_type.get()
 
         # update target label
-        self._target_label.configure(text=TARGET_LABELS.get(t, 'TARGET'))
+        self._target_label.configure(text=TARGET_LABELS.get(t, '目标'))
 
         # hide all optional frames
         self._args_frame.pack_forget()
@@ -282,9 +282,9 @@ class ActionDialog:
 
     def _update_admin_display(self):
         if self._admin_var.get() == '1':
-            self._admin_label.configure(text="☑ Run as Admin", fg=self.theme['accent'])
+            self._admin_label.configure(text="☑ 以管理员运行", fg=self.theme['accent'])
         else:
-            self._admin_label.configure(text="☐ Run as Admin", fg=self.theme['dim'])
+            self._admin_label.configure(text="☐ 以管理员运行", fg=self.theme['dim'])
 
     def _toggle_output(self, event=None):
         self._show_output_var.set('0' if self._show_output_var.get() == '1' else '1')
@@ -292,9 +292,9 @@ class ActionDialog:
 
     def _update_output_display(self):
         if self._show_output_var.get() == '1':
-            self._output_label.configure(text="☑ Show Output", fg=self.theme['accent'])
+            self._output_label.configure(text="☑ 显示输出", fg=self.theme['accent'])
         else:
-            self._output_label.configure(text="☐ Show Output", fg=self.theme['dim'])
+            self._output_label.configure(text="☐ 显示输出", fg=self.theme['dim'])
 
     # ── combo editor ──
 
@@ -306,7 +306,7 @@ class ActionDialog:
         if result:
             self._combo_steps = result['steps']
             self._combo_delay = result['delay']
-            self._combo_info.configure(text=f"{len(self._combo_steps)} steps, {self._combo_delay}ms delay")
+            self._combo_info.configure(text=f"{len(self._combo_steps)} 个步骤, {self._combo_delay}ms 延迟")
 
     # ── icon picker ──
 
