@@ -49,6 +49,20 @@ class SettingsView(BaseView):
 
         y += 8
 
+        # section: Theme
+        canvas.create_text(mx + 4, y + 4, text="主题", fill=c['dim'],
+                           font=(self._f, 7), anchor='w')
+        y += 20
+
+        current_theme = self.app.config.get('window', {}).get('theme', 'dark')
+        theme_labels = {'dark': '深色', 'light': '浅色'}
+        for tname in ['dark', 'light']:
+            active = current_theme == tname
+            y = self._draw_radio(canvas, mx, y, cw, theme_labels[tname], active,
+                                 f'theme_{tname}')
+
+        y += 8
+
         # section: Default View
         canvas.create_text(mx + 4, y + 4, text="默认视图", fill=c['dim'],
                            font=(self._f, 7), anchor='w')
@@ -150,6 +164,9 @@ class SettingsView(BaseView):
                 return True
             if tag.startswith('dv_'):
                 self._set_default_view(tag[3:])
+                return True
+            if tag.startswith('theme_'):
+                self.app.switch_theme(tag[6:])
                 return True
             if tag == 'set_opacity':
                 self._edit_value("透明度 (0.5-1.0)", 'opacity',

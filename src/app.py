@@ -13,6 +13,7 @@ from .core.platform_api import PlatformAPIServer
 from .core.tray import SystemTray
 from .core.stats import ActionStats
 from .themes.dark import DARK
+from .themes.light import LIGHT
 from .utils.http import HttpClient
 from .cards.token_stats import TokenStatsCard
 from .dialogs.token_dialog import TokenDialog
@@ -28,9 +29,9 @@ class App:
     def __init__(self, config_path: str = None):
         self._config_path = config_path or str(Path(__file__).parent.parent / 'config.yaml')
         self.config = self._load_config(self._config_path)
-        self.theme = DARK
-        self._f = DARK['font']
-        self._fm = DARK['mono']
+        self.theme = self._resolve_theme()
+        self._f = self.theme['font']
+        self._fm = self.theme['mono']
 
         api_cfg = self.config.get('api', {})
         self.tokens = api_cfg.get('tokens', [])
@@ -114,6 +115,29 @@ class App:
                          default_flow_style=False, sort_keys=False)
         except Exception:
             pass
+
+    def _resolve_theme(self):
+        """根据 config 中的 theme 字段选择主题"""
+        name = self.config.get('window', {}).get('theme', 'dark')
+        return LIGHT if name == 'light' else DARK
+
+    def switch_theme(self, name: str):
+        """切换主题并刷新 UI"""
+        self.config.setdefault('window', {})['theme'] = name
+        self.theme = self._resolve_theme()
+        self._f = self.theme['font']
+        self._fm = self.theme['mono']
+        # 更新所有视图的主题引用
+        for view in self._views.values():
+            view.theme = self.theme
+            view._f = self.theme['font']
+            view._fm = self.theme['mono']
+        # 更新窗口和画布背景
+        self.root.configure(bg=self.theme['bg'])
+        self.canvas.configure(bg=self.theme['bg'])
+        self.executor._theme = self.theme
+        self._save_config()
+        self._render()
 
     # ── window ──
 
