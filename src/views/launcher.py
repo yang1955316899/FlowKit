@@ -1,7 +1,7 @@
 """启动器网格视图"""
 
 import uuid
-from tkinter import Canvas, Menu, Toplevel, Entry, Frame, Label, StringVar
+from tkinter import Canvas, Menu, Toplevel, Entry, Frame, Label, StringVar, filedialog, messagebox
 from .base import BaseView
 from ..widgets.draw import rrect, pill
 
@@ -304,9 +304,14 @@ class LauncherView(BaseView):
         if action_idx is not None:
             menu.add_command(label="编辑", command=lambda: self._edit_action(action_idx))
             menu.add_command(label="删除", command=lambda: self._delete_action(action_idx))
+            menu.add_command(label="导出动作", command=lambda: self._export_action(action_idx))
             menu.add_separator()
 
         menu.add_command(label="添加操作", command=self._add_action)
+        menu.add_command(label="导入动作", command=self._import_action)
+        menu.add_separator()
+        menu.add_command(label="导出整页", command=self._export_page)
+        menu.add_command(label="导入页面", command=self._import_page)
         menu.add_separator()
         menu.add_command(label="添加页面", command=self._add_page)
         if len(self._pages) > 1:
@@ -554,3 +559,167 @@ class LauncherView(BaseView):
         py = root.winfo_rooty() + 42
         dlg.geometry(f"+{px}+{py}")
         entry.focus_set()
+
+    # ── 导入/导出 ──
+
+    def _export_action(self, idx):
+        """导出单个动作为 .mpkg"""
+        pages = self._pages
+        if self._current_page >= len(pages):
+            return
+        actions = pages[self._current_page].get('actions', [])
+        if idx >= len(actions) or actions[idx] is None:
+            return
+
+        action = actions[idx]
+        label = action.get('label', '动作')
+        path = filedialog.asksaveasfilename(
+            parent=self.app.root,
+            title="导出动作",
+            initialfile=f"{label}.mpkg",
+            defaultextension=".mpkg",
+            filetypes=[("动作包", "*.mpkg"), ("所有文件", "*.*")])
+        if not path:
+            return
+
+        from ..core.package import ActionPackage
+        if ActionPackage.export_action(action, path):
+            self.app._show_toast("导出成功!")
+        else:
+            self.app._show_toast("导出失败!")
+
+    def _export_page(self):
+        """导出当前整页为 .mpkg"""
+        pages = self._pages
+        if self._current_page >= len(pages):
+            return
+
+        page = pages[self._current_page]
+        name = page.get('name', '页面')
+        path = filedialog.asksaveasfilename(
+            parent=self.app.root,
+            title="导出页面",
+            initialfile=f"{name}.mpkg",
+            defaultextension=".mpkg",
+            filetypes=[("动作包", "*.mpkg"), ("所有文件", "*.*")])
+        if not path:
+            return
+
+        from ..core.package import ActionPackage
+        if ActionPackage.export_page(page, path):
+            self.app._show_toast("页面导出成功!")
+        else:
+            self.app._show_toast("导出失败!")
+
+    def _import_action(self):
+        """导入 .mpkg 中的单个动作到当前页"""
+        path = filedialog.askopenfilename(
+            parent=self.app.root,
+            title="导入动作",
+            filetypes=[("动作包", "*.mpkg"), ("所有文件", "*.*")])
+        if not path:
+            return
+
+        from ..core.package import ActionPackage
+        data = ActionPackage.import_package(path)
+        if not data:
+            self.app._show_toast("导入失败!")
+            return
+
+        pkg_type = data.get('type', 'action')
+
+        if pkg_type == 'action' and 'action' in data:
+            action = data['action']
+            self._ensure_page()
+            pages = self._pages
+            page = pages[self._current_page]
+            actions = page.setdefault('actions', [])
+            # 找空位或追加
+            placed = False
+            for i in range(len(actions)):
+                if actions[i] is None:
+                    actions[i] = action
+                    placed = True
+                    break
+            if not placed:
+                actions.append(action)
+            self.app._save_config()
+            self._refresh_hotkeys()
+            self.app._render()
+            self.app._show_toast("导入成功!")
+
+        elif pkg_type == 'page' and 'page' in data:
+            # 页面包当作动作导入时，取第一个非空动作
+            page_data = data['page']
+            for act in page_data.get('actions', []):
+                if act is not None:
+                    self._ensure_page()
+                    pages = self._pages
+                    page = pages[self._current_page]
+                    actions = page.setdefault('actions', [])
+                    placed = False
+                    for i in range(len(actions)):
+                        if actions[i] is None:
+                            actions[i] = act
+                            placed = True
+                            break
+                    if not placed:
+                        actions.append(act)
+            self.app._save_config()
+            self._refresh_hotkeys()
+            self.app._render()
+            self.app._show_toast("导入成功!")
+        else:
+            self.app._show_toast("无效的动作包!")
+
+    def _import_page(self):
+        """导入 .mpkg 为新页面"""
+        path = filedialog.askopenfilename(
+            parent=self.app.root,
+            title="导入页面",
+            filetypes=[("动作包", "*.mpkg"), ("所有文件", "*.*")])
+        if not path:
+            return
+
+        from ..core.package import ActionPackage
+        data = ActionPackage.import_package(path)
+        if not data:
+            self.app._show_toast("导入失败!")
+            return
+
+        pkg_type = data.get('type', 'action')
+
+        if pkg_type == 'page' and 'page' in data:
+            page_data = data['page']
+            new_page = {
+                'name': page_data.get('name', '导入页面'),
+                'actions': page_data.get('actions', []),
+            }
+            ctx = page_data.get('context', '')
+            if ctx:
+                new_page['context'] = ctx
+            pages = self.app.config.setdefault('launcher', {}).setdefault('pages', [])
+            pages.append(new_page)
+            self._current_page = len(pages) - 1
+            self.app._save_config()
+            self._refresh_hotkeys()
+            self.app._render()
+            self.app._show_toast("页面导入成功!")
+
+        elif pkg_type == 'action' and 'action' in data:
+            # 单动作包当作页面导入时，创建新页面放入
+            action = data['action']
+            label = action.get('label', '导入')
+            new_page = {
+                'name': f'{label} 页',
+                'actions': [action],
+            }
+            pages = self.app.config.setdefault('launcher', {}).setdefault('pages', [])
+            pages.append(new_page)
+            self._current_page = len(pages) - 1
+            self.app._save_config()
+            self._refresh_hotkeys()
+            self.app._render()
+            self.app._show_toast("页面导入成功!")
+        else:
+            self.app._show_toast("无效的动作包!")

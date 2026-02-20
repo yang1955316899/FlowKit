@@ -33,6 +33,6 @@
 ## 批次 7：Phase 8.1 拖拽排序 (P2)
 - [ ] 修改 launcher.py — 长按进入编辑模式、拖拽交换位置
 
-## 批次 8：Phase 9.1-9.2 导入导出 (P2)
-- [ ] 新建 src/core/package.py — 动作打包/解包
-- [ ] 修改 launcher.py — 右键菜单增加导入/导出
+## 批次 8：Phase 9.1-9.2 导入导出 (P2) ✅
+- [x] 新建 src/core/package.py — 动作打包/解包
+- [x] 修改 launcher.py — 右键菜单增加导入/导出
