@@ -1,0 +1,329 @@
+"""操作增删改对话框"""
+
+from tkinter import Toplevel, Label, Entry, Frame, Canvas, StringVar
+from ..widgets.draw import rr_points, pill
+from ..utils.icons import ICON_CATEGORIES
+
+
+ACTION_TYPES = [
+    ('app', 'App'),
+    ('file', 'File'),
+    ('folder', 'Folder'),
+    ('url', 'URL'),
+    ('shell', 'Shell'),
+    ('snippet', 'Snippet'),
+    ('keys', 'Keys'),
+    ('combo', 'Combo'),
+]
+
+
+class ActionDialog:
+
+    def __init__(self, parent, theme: dict, action: dict = None):
+        self.result = None
+        self.theme = theme
+        self._f = theme['font']
+        self._fm = theme['mono']
+        self._drag = {'x': 0, 'y': 0}
+        self._action_type = StringVar(value=action.get('type', 'app') if action else 'app')
+
+        self.win = Toplevel(parent)
+        self.win.overrideredirect(True)
+        self.win.attributes('-topmost', True)
+        self.win.configure(bg=theme['border'])
+
+        inner = Frame(self.win, bg=theme['bg'])
+        inner.pack(fill='both', expand=True, padx=1, pady=1)
+
+        # title bar
+        tb = Frame(inner, bg=theme['card'], height=30)
+        tb.pack(fill='x')
+        tb.pack_propagate(False)
+
+        dot = Canvas(tb, width=8, height=8, bg=theme['card'], highlightthickness=0)
+        dot.pack(side='left', padx=(12, 0))
+        dot.create_oval(0, 0, 8, 8, fill=theme['accent'], outline='')
+
+        title = "Edit Action" if action else "Add Action"
+        Label(tb, text=title, fg=theme['sub'], bg=theme['card'],
+              font=(self._f, 8, 'bold')).pack(side='left', padx=(6, 0))
+
+        cl = Label(tb, text="\u00D7", fg=theme['dim'], bg=theme['card'],
+                   font=(self._f, 11), cursor='hand2')
+        cl.pack(side='right', padx=10)
+        cl.bind('<Button-1>', lambda e: self.win.destroy())
+        tb.bind('<Button-1>', self._ds)
+        tb.bind('<B1-Motion>', self._dm)
+
+        Frame(inner, bg=theme['border_subtle'], height=1).pack(fill='x')
+
+        # form area
+        self._form = Frame(inner, bg=theme['bg'])
+        self._form.pack(fill='both', expand=True, padx=16, pady=(10, 14))
+
+        # type selector row
+        type_frame = Frame(self._form, bg=theme['bg'])
+        type_frame.pack(fill='x', pady=(0, 8))
+
+        for type_id, type_label in ACTION_TYPES:
+            btn = Label(type_frame, text=type_label, cursor='hand2',
+                        font=(self._fm, 7), padx=6, pady=2)
+            btn.pack(side='left', padx=(0, 3))
+            btn._type_id = type_id
+            btn.bind('<Button-1>', lambda e, t=type_id: self._select_type(t))
+            if not hasattr(self, '_type_labels'):
+                self._type_labels = []
+            self._type_labels.append(btn)
+
+        # dynamic fields container
+        self._fields_frame = Frame(self._form, bg=theme['bg'])
+        self._fields_frame.pack(fill='both', expand=True)
+
+        # common fields
+        self._entries = {}
+        self._build_common_fields(action)
+        self._build_type_fields(action)
+        self._update_type_pills()
+
+        # icon picker area
+        self._icon_var = StringVar(value=action.get('icon', '\u2726') if action else '\u2726')
+        icon_frame = Frame(self._form, bg=theme['bg'])
+        icon_frame.pack(fill='x', pady=(8, 0))
+        Label(icon_frame, text="ICON", fg=theme['dim'], bg=theme['bg'],
+              font=(self._fm, 7)).pack(side='left')
+        self._icon_display = Label(icon_frame, text=self._icon_var.get(),
+                                    font=('Segoe UI Emoji', 14),
+                                    fg=theme['text'], bg=theme['bg'], cursor='hand2')
+        self._icon_display.pack(side='left', padx=(8, 0))
+        self._icon_display.bind('<Button-1>', self._show_icon_picker)
+
+        # buttons
+        bf = Frame(self._form, bg=theme['bg'])
+        bf.pack(fill='x', pady=(12, 0))
+
+        sc = Canvas(bf, width=60, height=28, bg=theme['bg'], highlightthickness=0, cursor='hand2')
+        sc.pack(side='right')
+        pts = rr_points(0, 0, 60, 28, 14)
+        sc.create_polygon(pts, fill=theme['accent'], outline='')
+        sc.create_text(30, 14, text="Save", fill='#1e1e2e', font=(self._f, 8, 'bold'))
+        sc.bind('<Button-1>', lambda e: self._save())
+
+        cc = Canvas(bf, width=60, height=28, bg=theme['bg'], highlightthickness=0, cursor='hand2')
+        cc.pack(side='right', padx=(0, 8))
+        pts2 = rr_points(0, 0, 60, 28, 14)
+        cc.create_polygon(pts2, fill='', outline=theme['border'])
+        cc.create_text(30, 14, text="Cancel", fill=theme['dim'], font=(self._f, 8))
+        cc.bind('<Button-1>', lambda e: self.win.destroy())
+
+        self.win.bind('<Return>', lambda e: self._save())
+        self.win.bind('<Escape>', lambda e: self.win.destroy())
+
+        dw, dh = 340, 420
+        self.win.geometry(f"{dw}x{dh}")
+        self.win.update_idletasks()
+        px = parent.winfo_rootx() + (parent.winfo_width() - dw) // 2
+        py = parent.winfo_rooty() + (parent.winfo_height() - dh) // 2
+        self.win.geometry(f"+{px}+{py}")
+        self.win.grab_set()
+
+    def _build_common_fields(self, action):
+        c = self.theme
+        fm = self._form
+
+        # Label
+        Label(self._fields_frame, text="LABEL", fg=c['dim'], bg=c['bg'],
+              font=(self._fm, 7)).pack(anchor='w', pady=(0, 4))
+        self._entries['label'] = self._make_entry(self._fields_frame)
+        if action:
+            self._entries['label'].insert(0, action.get('label', ''))
+
+        # Target
+        Label(self._fields_frame, text="TARGET", fg=c['dim'], bg=c['bg'],
+              font=(self._fm, 7)).pack(anchor='w', pady=(8, 4))
+        self._entries['target'] = self._make_entry(self._fields_frame)
+        if action:
+            self._entries['target'].insert(0, action.get('target', ''))
+
+    def _build_type_fields(self, action):
+        """构建类型特定字段"""
+        c = self.theme
+
+        # Args (for app type)
+        Label(self._fields_frame, text="ARGS", fg=c['dim'], bg=c['bg'],
+              font=(self._fm, 7)).pack(anchor='w', pady=(8, 4))
+        self._entries['args'] = self._make_entry(self._fields_frame)
+        if action:
+            self._entries['args'].insert(0, action.get('args', ''))
+
+        # Shell type (for shell type)
+        shell_frame = Frame(self._fields_frame, bg=c['bg'])
+        shell_frame.pack(fill='x', pady=(8, 0))
+        Label(shell_frame, text="SHELL TYPE", fg=c['dim'], bg=c['bg'],
+              font=(self._fm, 7)).pack(anchor='w', pady=(0, 4))
+        self._shell_type_var = StringVar(value=action.get('shell_type', 'cmd') if action else 'cmd')
+        shell_opts = Frame(shell_frame, bg=c['bg'])
+        shell_opts.pack(fill='x')
+        self._shell_labels = []
+        for st in ['cmd', 'powershell', 'python']:
+            lbl = Label(shell_opts, text=st, cursor='hand2',
+                        font=(self._fm, 7), padx=6, pady=2)
+            lbl.pack(side='left', padx=(0, 3))
+            lbl.bind('<Button-1>', lambda e, s=st: self._select_shell(s))
+            self._shell_labels.append(lbl)
+        self._shell_frame = shell_frame
+        self._update_shell_pills()
+
+        # Admin checkbox (for app type)
+        self._admin_var = StringVar(value='1' if action and action.get('admin') else '0')
+        admin_frame = Frame(self._fields_frame, bg=c['bg'])
+        admin_frame.pack(fill='x', pady=(8, 0))
+        self._admin_label = Label(admin_frame, text="☐ Run as Admin", fg=c['dim'],
+                                   bg=c['bg'], font=(self._fm, 7), cursor='hand2')
+        self._admin_label.pack(anchor='w')
+        self._admin_label.bind('<Button-1>', self._toggle_admin)
+        self._admin_frame = admin_frame
+        self._update_admin_display()
+
+    def _make_entry(self, parent):
+        c = self.theme
+        e = Entry(parent, bg=c['card'], fg=c['text'],
+                  insertbackground=c['accent'], relief='flat',
+                  font=(self._f, 9), bd=0, highlightthickness=1,
+                  highlightbackground=c['border_subtle'],
+                  highlightcolor=c['accent'])
+        e.pack(fill='x', ipady=5)
+        return e
+
+    def _select_type(self, type_id):
+        self._action_type.set(type_id)
+        self._update_type_pills()
+        self._update_field_visibility()
+
+    def _update_type_pills(self):
+        c = self.theme
+        current = self._action_type.get()
+        for lbl in self._type_labels:
+            if lbl._type_id == current:
+                lbl.configure(bg=c['accent'], fg='#1e1e2e')
+            else:
+                lbl.configure(bg=c['card2'], fg=c['dim'])
+
+    def _update_field_visibility(self):
+        """根据类型显示/隐藏字段"""
+        t = self._action_type.get()
+        # args: only for app
+        show_args = t == 'app'
+        # shell_type: only for shell
+        show_shell = t == 'shell'
+        # admin: only for app
+        show_admin = t == 'app'
+
+        if show_args:
+            self._entries['args'].master.pack_configure()
+        if show_shell:
+            self._shell_frame.pack_configure()
+        if show_admin:
+            self._admin_frame.pack_configure()
+
+    def _select_shell(self, shell_type):
+        self._shell_type_var.set(shell_type)
+        self._update_shell_pills()
+
+    def _update_shell_pills(self):
+        c = self.theme
+        current = self._shell_type_var.get()
+        for lbl in self._shell_labels:
+            if lbl.cget('text') == current:
+                lbl.configure(bg=c['accent'], fg='#1e1e2e')
+            else:
+                lbl.configure(bg=c['card2'], fg=c['dim'])
+
+    def _toggle_admin(self, event=None):
+        if self._admin_var.get() == '1':
+            self._admin_var.set('0')
+        else:
+            self._admin_var.set('1')
+        self._update_admin_display()
+
+    def _update_admin_display(self):
+        if self._admin_var.get() == '1':
+            self._admin_label.configure(text="☑ Run as Admin", fg=self.theme['accent'])
+        else:
+            self._admin_label.configure(text="☐ Run as Admin", fg=self.theme['dim'])
+
+    def _show_icon_picker(self, event=None):
+        """显示 emoji 图标选择器"""
+        c = self.theme
+        picker = Toplevel(self.win)
+        picker.overrideredirect(True)
+        picker.attributes('-topmost', True)
+        picker.configure(bg=c['border'])
+
+        inner = Frame(picker, bg=c['bg'])
+        inner.pack(fill='both', expand=True, padx=1, pady=1)
+
+        for cat_name, icons in ICON_CATEGORIES.items():
+            Label(inner, text=cat_name, fg=c['dim'], bg=c['bg'],
+                  font=(self._fm, 7)).pack(anchor='w', padx=8, pady=(6, 2))
+            row = Frame(inner, bg=c['bg'])
+            row.pack(fill='x', padx=8)
+            for emoji, name in icons:
+                lbl = Label(row, text=emoji, font=('Segoe UI Emoji', 12),
+                            bg=c['bg'], cursor='hand2')
+                lbl.pack(side='left', padx=2, pady=2)
+                lbl.bind('<Button-1>', lambda e, em=emoji: self._pick_icon(em, picker))
+
+        pw, ph = 320, 280
+        picker.geometry(f"{pw}x{ph}")
+        px = self.win.winfo_x() + 10
+        py = self.win.winfo_y() + self.win.winfo_height() - ph - 10
+        picker.geometry(f"+{px}+{py}")
+        picker.grab_set()
+
+    def _pick_icon(self, emoji, picker):
+        self._icon_var.set(emoji)
+        self._icon_display.configure(text=emoji)
+        picker.destroy()
+
+    def _ds(self, e):
+        self._drag['x'] = e.x_root - self.win.winfo_x()
+        self._drag['y'] = e.y_root - self.win.winfo_y()
+
+    def _dm(self, e):
+        self.win.geometry(f"+{e.x_root-self._drag['x']}+{e.y_root-self._drag['y']}")
+
+    def _save(self):
+        label = self._entries['label'].get().strip()
+        target = self._entries['target'].get().strip()
+        action_type = self._action_type.get()
+
+        if not label:
+            return
+
+        result = {
+            'type': action_type,
+            'label': label,
+            'icon': self._icon_var.get(),
+            'target': target,
+        }
+
+        if action_type == 'app':
+            args = self._entries['args'].get().strip()
+            if args:
+                result['args'] = args
+            if self._admin_var.get() == '1':
+                result['admin'] = True
+
+        if action_type == 'shell':
+            result['shell_type'] = self._shell_type_var.get()
+
+        if action_type == 'combo':
+            result['steps'] = result.get('steps', [])
+            result['delay'] = 500
+
+        self.result = result
+        self.win.destroy()
+
+    def show(self):
+        self.win.wait_window()
+        return self.result
