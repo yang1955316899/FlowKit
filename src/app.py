@@ -58,7 +58,8 @@ class App:
         self.canvas = None
 
         # action executor
-        self.executor = ActionExecutor()
+        self.executor = ActionExecutor(root=self.root, theme=self.theme)
+        self.executor.set_feedback_callback(self._show_toast)
 
         # views
         self._views: dict[str, 'BaseView'] = {}
@@ -71,14 +72,17 @@ class App:
 
         self._copy_toast = None
         self._copy_toast_visible = False
+        self._toast_text = "Copied!"
 
     # ── views ──
 
     def _init_views(self):
         from .views.launcher import LauncherView
+        from .views.settings import SettingsView
         self._views['launcher'] = LauncherView(self)
         self._views['detail'] = DetailView(self)
         self._views['overview'] = OverviewView(self)
+        self._views['settings'] = SettingsView(self)
 
     # ── config ──
 
@@ -122,8 +126,8 @@ class App:
         self.canvas.pack(fill='both', expand=True)
         self.canvas.bind('<Button-1>', self._on_click)
         self.canvas.bind('<Button-3>', self._on_right_click)
-        self.canvas.bind('<B1-Motion>', self.wm.drag)
-        self.canvas.bind('<ButtonRelease-1>', self.wm.drag_end)
+        self.canvas.bind('<B1-Motion>', self._on_drag)
+        self.canvas.bind('<ButtonRelease-1>', self._on_drag_end)
         self.canvas.bind('<MouseWheel>', self._on_scroll)
         self.root.bind('<Escape>', lambda e: self.root.destroy())
         self.root.bind('<Leave>', lambda e: self._on_leave())
@@ -155,17 +159,33 @@ class App:
                     self._switch_view('detail'); return
                 if tag == 'nav_overview':
                     self._switch_view('overview'); return
+                if tag == 'nav_settings':
+                    self._switch_view('settings'); return
 
         # delegate to current view
         all_tags = []
         for item in items:
-            all_tags.extend(self.canvas.gettags(item))
+            for t in self.canvas.gettags(item):
+                if t and t != 'current':
+                    all_tags.append(t)
         if all_tags:
             view = self._views.get(self.current_view)
             if view and view.on_click(self.canvas, event, all_tags):
                 return
 
-        self.wm.drag_start(event)
+        # 只有点击 header 区域才允许拖拽
+        if event.y <= 36:
+            self._dragging = True
+            self.wm.drag_start(event)
+
+    def _on_drag(self, event):
+        if getattr(self, '_dragging', False):
+            self.wm.drag(event)
+
+    def _on_drag_end(self, event):
+        if getattr(self, '_dragging', False):
+            self._dragging = False
+            self.wm.drag_end(event)
 
     def _on_right_click(self, event):
         """右键事件委托给当前视图"""
@@ -234,6 +254,13 @@ class App:
 
     def _hide_copy_toast(self):
         self._copy_toast_visible = False; self._copy_toast = None; self._render()
+
+    def _show_toast(self, msg: str = "Done!"):
+        """通用 toast 反馈"""
+        if self._copy_toast: self.root.after_cancel(self._copy_toast)
+        self._toast_text = msg
+        self._copy_toast_visible = True; self._render()
+        self._copy_toast = self.root.after(1200, self._hide_copy_toast)
 
     # ── overview data ──
 
@@ -336,6 +363,7 @@ class App:
             ('ALL', 'nav_overview', 'overview'),
             ('\u2261', 'nav_detail', 'detail'),     # ≡
             ('\u229E', 'nav_launcher', 'launcher'),  # ⊞
+            ('\u2699', 'nav_settings', 'settings'),  # ⚙
         ]
         for label, tag, view_name in nav_items:
             active = self.current_view == view_name

@@ -11,10 +11,22 @@ ACTION_TYPES = [
     ('folder', 'Folder'),
     ('url', 'URL'),
     ('shell', 'Shell'),
-    ('snippet', 'Snippet'),
+    ('snippet', 'Text'),
     ('keys', 'Keys'),
     ('combo', 'Combo'),
 ]
+
+# target 字段的标签随类型变化
+TARGET_LABELS = {
+    'app': 'PATH',
+    'file': 'FILE PATH',
+    'folder': 'FOLDER PATH',
+    'url': 'URL',
+    'shell': 'COMMAND',
+    'snippet': 'TEXT TO COPY',
+    'keys': 'KEY COMBO  (e.g. ctrl+shift+a)',
+    'combo': 'DESCRIPTION',
+}
 
 
 class ActionDialog:
@@ -25,6 +37,7 @@ class ActionDialog:
         self._f = theme['font']
         self._fm = theme['mono']
         self._drag = {'x': 0, 'y': 0}
+        self._type_labels = []
         self._action_type = StringVar(value=action.get('type', 'app') if action else 'app')
 
         self.win = Toplevel(parent)
@@ -71,21 +84,84 @@ class ActionDialog:
             btn.pack(side='left', padx=(0, 3))
             btn._type_id = type_id
             btn.bind('<Button-1>', lambda e, t=type_id: self._select_type(t))
-            if not hasattr(self, '_type_labels'):
-                self._type_labels = []
             self._type_labels.append(btn)
 
-        # dynamic fields container
+        # ── fields container ──
         self._fields_frame = Frame(self._form, bg=theme['bg'])
         self._fields_frame.pack(fill='both', expand=True)
 
-        # common fields
         self._entries = {}
-        self._build_common_fields(action)
-        self._build_type_fields(action)
-        self._update_type_pills()
 
-        # icon picker area
+        # Label field (always visible)
+        Label(self._fields_frame, text="LABEL", fg=theme['dim'], bg=theme['bg'],
+              font=(self._fm, 7)).pack(anchor='w', pady=(0, 4))
+        self._entries['label'] = self._make_entry(self._fields_frame)
+        if action:
+            self._entries['label'].insert(0, action.get('label', ''))
+
+        # Target field (always visible, label changes per type)
+        self._target_label = Label(self._fields_frame, text="TARGET", fg=theme['dim'],
+                                    bg=theme['bg'], font=(self._fm, 7))
+        self._target_label.pack(anchor='w', pady=(8, 4))
+        self._entries['target'] = self._make_entry(self._fields_frame)
+        if action:
+            self._entries['target'].insert(0, action.get('target', ''))
+
+        # Args field (app only)
+        self._args_frame = Frame(self._fields_frame, bg=theme['bg'])
+        Label(self._args_frame, text="ARGS", fg=theme['dim'], bg=theme['bg'],
+              font=(self._fm, 7)).pack(anchor='w', pady=(0, 4))
+        self._entries['args'] = self._make_entry(self._args_frame)
+        if action:
+            self._entries['args'].insert(0, action.get('args', ''))
+
+        # Admin toggle (app only)
+        self._admin_var = StringVar(value='1' if action and action.get('admin') else '0')
+        self._admin_frame = Frame(self._fields_frame, bg=theme['bg'])
+        self._admin_label = Label(self._admin_frame, text="☐ Run as Admin", fg=theme['dim'],
+                                   bg=theme['bg'], font=(self._fm, 7), cursor='hand2')
+        self._admin_label.pack(anchor='w')
+        self._admin_label.bind('<Button-1>', self._toggle_admin)
+
+        # Shell type (shell only)
+        self._shell_frame = Frame(self._fields_frame, bg=theme['bg'])
+        Label(self._shell_frame, text="SHELL TYPE", fg=theme['dim'], bg=theme['bg'],
+              font=(self._fm, 7)).pack(anchor='w', pady=(0, 4))
+        self._shell_type_var = StringVar(value=action.get('shell_type', 'cmd') if action else 'cmd')
+        shell_opts = Frame(self._shell_frame, bg=theme['bg'])
+        shell_opts.pack(fill='x')
+        self._shell_labels = []
+        for st in ['cmd', 'powershell', 'python']:
+            lbl = Label(shell_opts, text=st, cursor='hand2',
+                        font=(self._fm, 7), padx=6, pady=2)
+            lbl.pack(side='left', padx=(0, 3))
+            lbl.bind('<Button-1>', lambda e, s=st: self._select_shell(s))
+            self._shell_labels.append(lbl)
+
+        # Show output toggle (shell only)
+        self._show_output_var = StringVar(
+            value='1' if action and action.get('show_output') else '0')
+        self._output_frame = Frame(self._fields_frame, bg=theme['bg'])
+        self._output_label = Label(self._output_frame, text="☐ Show Output",
+                                    fg=theme['dim'], bg=theme['bg'],
+                                    font=(self._fm, 7), cursor='hand2')
+        self._output_label.pack(anchor='w')
+        self._output_label.bind('<Button-1>', self._toggle_output)
+
+        # Combo edit button (combo only)
+        self._combo_frame = Frame(self._fields_frame, bg=theme['bg'])
+        self._combo_steps = list(action.get('steps', [])) if action else []
+        self._combo_delay = action.get('delay', 500) if action else 500
+        combo_btn = Label(self._combo_frame, text="Edit Steps...", fg=theme['accent'],
+                          bg=theme['card2'], font=(self._f, 8), cursor='hand2',
+                          padx=10, pady=4)
+        combo_btn.pack(fill='x')
+        combo_btn.bind('<Button-1>', lambda e: self._edit_combo())
+        self._combo_info = Label(self._combo_frame, text=f"{len(self._combo_steps)} steps",
+                                  fg=theme['dim'], bg=theme['bg'], font=(self._fm, 7))
+        self._combo_info.pack(anchor='w', pady=(4, 0))
+
+        # icon picker
         self._icon_var = StringVar(value=action.get('icon', '\u2726') if action else '\u2726')
         icon_frame = Frame(self._form, bg=theme['bg'])
         icon_frame.pack(fill='x', pady=(8, 0))
@@ -118,6 +194,13 @@ class ActionDialog:
         self.win.bind('<Return>', lambda e: self._save())
         self.win.bind('<Escape>', lambda e: self.win.destroy())
 
+        # apply initial state
+        self._update_type_pills()
+        self._update_field_visibility()
+        self._update_admin_display()
+        self._update_shell_pills()
+        self._update_output_display()
+
         dw, dh = 340, 420
         self.win.geometry(f"{dw}x{dh}")
         self.win.update_idletasks()
@@ -125,64 +208,7 @@ class ActionDialog:
         py = parent.winfo_rooty() + (parent.winfo_height() - dh) // 2
         self.win.geometry(f"+{px}+{py}")
         self.win.grab_set()
-
-    def _build_common_fields(self, action):
-        c = self.theme
-        fm = self._form
-
-        # Label
-        Label(self._fields_frame, text="LABEL", fg=c['dim'], bg=c['bg'],
-              font=(self._fm, 7)).pack(anchor='w', pady=(0, 4))
-        self._entries['label'] = self._make_entry(self._fields_frame)
-        if action:
-            self._entries['label'].insert(0, action.get('label', ''))
-
-        # Target
-        Label(self._fields_frame, text="TARGET", fg=c['dim'], bg=c['bg'],
-              font=(self._fm, 7)).pack(anchor='w', pady=(8, 4))
-        self._entries['target'] = self._make_entry(self._fields_frame)
-        if action:
-            self._entries['target'].insert(0, action.get('target', ''))
-
-    def _build_type_fields(self, action):
-        """构建类型特定字段"""
-        c = self.theme
-
-        # Args (for app type)
-        Label(self._fields_frame, text="ARGS", fg=c['dim'], bg=c['bg'],
-              font=(self._fm, 7)).pack(anchor='w', pady=(8, 4))
-        self._entries['args'] = self._make_entry(self._fields_frame)
-        if action:
-            self._entries['args'].insert(0, action.get('args', ''))
-
-        # Shell type (for shell type)
-        shell_frame = Frame(self._fields_frame, bg=c['bg'])
-        shell_frame.pack(fill='x', pady=(8, 0))
-        Label(shell_frame, text="SHELL TYPE", fg=c['dim'], bg=c['bg'],
-              font=(self._fm, 7)).pack(anchor='w', pady=(0, 4))
-        self._shell_type_var = StringVar(value=action.get('shell_type', 'cmd') if action else 'cmd')
-        shell_opts = Frame(shell_frame, bg=c['bg'])
-        shell_opts.pack(fill='x')
-        self._shell_labels = []
-        for st in ['cmd', 'powershell', 'python']:
-            lbl = Label(shell_opts, text=st, cursor='hand2',
-                        font=(self._fm, 7), padx=6, pady=2)
-            lbl.pack(side='left', padx=(0, 3))
-            lbl.bind('<Button-1>', lambda e, s=st: self._select_shell(s))
-            self._shell_labels.append(lbl)
-        self._shell_frame = shell_frame
-        self._update_shell_pills()
-
-        # Admin checkbox (for app type)
-        self._admin_var = StringVar(value='1' if action and action.get('admin') else '0')
-        admin_frame = Frame(self._fields_frame, bg=c['bg'])
-        admin_frame.pack(fill='x', pady=(8, 0))
-        self._admin_label = Label(admin_frame, text="☐ Run as Admin", fg=c['dim'],
-                                   bg=c['bg'], font=(self._fm, 7), cursor='hand2')
-        self._admin_label.pack(anchor='w')
-        self._admin_label.bind('<Button-1>', self._toggle_admin)
-        self._admin_frame = admin_frame
-        self._update_admin_display()
+        self._entries['label'].focus_set()
 
     def _make_entry(self, parent):
         c = self.theme
@@ -193,6 +219,8 @@ class ActionDialog:
                   highlightcolor=c['accent'])
         e.pack(fill='x', ipady=5)
         return e
+
+    # ── type switching ──
 
     def _select_type(self, type_id):
         self._action_type.set(type_id)
@@ -209,21 +237,29 @@ class ActionDialog:
                 lbl.configure(bg=c['card2'], fg=c['dim'])
 
     def _update_field_visibility(self):
-        """根据类型显示/隐藏字段"""
         t = self._action_type.get()
-        # args: only for app
-        show_args = t == 'app'
-        # shell_type: only for shell
-        show_shell = t == 'shell'
-        # admin: only for app
-        show_admin = t == 'app'
 
-        if show_args:
-            self._entries['args'].master.pack_configure()
-        if show_shell:
-            self._shell_frame.pack_configure()
-        if show_admin:
-            self._admin_frame.pack_configure()
+        # update target label
+        self._target_label.configure(text=TARGET_LABELS.get(t, 'TARGET'))
+
+        # hide all optional frames
+        self._args_frame.pack_forget()
+        self._admin_frame.pack_forget()
+        self._shell_frame.pack_forget()
+        self._output_frame.pack_forget()
+        self._combo_frame.pack_forget()
+
+        # show relevant ones
+        if t == 'app':
+            self._args_frame.pack(fill='x', pady=(8, 0))
+            self._admin_frame.pack(fill='x', pady=(6, 0))
+        elif t == 'shell':
+            self._shell_frame.pack(fill='x', pady=(8, 0))
+            self._output_frame.pack(fill='x', pady=(6, 0))
+        elif t == 'combo':
+            self._combo_frame.pack(fill='x', pady=(8, 0))
+
+    # ── shell type ──
 
     def _select_shell(self, shell_type):
         self._shell_type_var.set(shell_type)
@@ -238,11 +274,10 @@ class ActionDialog:
             else:
                 lbl.configure(bg=c['card2'], fg=c['dim'])
 
+    # ── toggles ──
+
     def _toggle_admin(self, event=None):
-        if self._admin_var.get() == '1':
-            self._admin_var.set('0')
-        else:
-            self._admin_var.set('1')
+        self._admin_var.set('0' if self._admin_var.get() == '1' else '1')
         self._update_admin_display()
 
     def _update_admin_display(self):
@@ -251,8 +286,31 @@ class ActionDialog:
         else:
             self._admin_label.configure(text="☐ Run as Admin", fg=self.theme['dim'])
 
+    def _toggle_output(self, event=None):
+        self._show_output_var.set('0' if self._show_output_var.get() == '1' else '1')
+        self._update_output_display()
+
+    def _update_output_display(self):
+        if self._show_output_var.get() == '1':
+            self._output_label.configure(text="☑ Show Output", fg=self.theme['accent'])
+        else:
+            self._output_label.configure(text="☐ Show Output", fg=self.theme['dim'])
+
+    # ── combo editor ──
+
+    def _edit_combo(self):
+        from .combo_editor import ComboEditor
+        result = ComboEditor(self.win, self.theme,
+                             combo={'steps': self._combo_steps,
+                                    'delay': self._combo_delay}).show()
+        if result:
+            self._combo_steps = result['steps']
+            self._combo_delay = result['delay']
+            self._combo_info.configure(text=f"{len(self._combo_steps)} steps, {self._combo_delay}ms delay")
+
+    # ── icon picker ──
+
     def _show_icon_picker(self, event=None):
-        """显示 emoji 图标选择器"""
         c = self.theme
         picker = Toplevel(self.win)
         picker.overrideredirect(True)
@@ -285,12 +343,16 @@ class ActionDialog:
         self._icon_display.configure(text=emoji)
         picker.destroy()
 
+    # ── drag ──
+
     def _ds(self, e):
         self._drag['x'] = e.x_root - self.win.winfo_x()
         self._drag['y'] = e.y_root - self.win.winfo_y()
 
     def _dm(self, e):
         self.win.geometry(f"+{e.x_root-self._drag['x']}+{e.y_root-self._drag['y']}")
+
+    # ── save ──
 
     def _save(self):
         label = self._entries['label'].get().strip()
@@ -316,10 +378,12 @@ class ActionDialog:
 
         if action_type == 'shell':
             result['shell_type'] = self._shell_type_var.get()
+            if self._show_output_var.get() == '1':
+                result['show_output'] = True
 
         if action_type == 'combo':
-            result['steps'] = result.get('steps', [])
-            result['delay'] = 500
+            result['steps'] = self._combo_steps
+            result['delay'] = self._combo_delay
 
         self.result = result
         self.win.destroy()

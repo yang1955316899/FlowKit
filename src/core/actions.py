@@ -12,6 +12,14 @@ import threading
 class ActionExecutor:
     """执行各类快捷操作"""
 
+    def __init__(self, root=None, theme=None):
+        self._root = root
+        self._theme = theme
+        self._on_feedback = None  # callback(msg) for toast
+
+    def set_feedback_callback(self, cb):
+        self._on_feedback = cb
+
     def execute(self, action: dict):
         """按 type 分发执行"""
         if not action:
@@ -30,35 +38,48 @@ class ActionExecutor:
         if handler:
             threading.Thread(target=handler, args=(action,), daemon=True).start()
 
+    def _feedback(self, msg: str):
+        if self._on_feedback and self._root:
+            self._root.after(0, self._on_feedback, msg)
+
     def _exec_app(self, action: dict):
         """启动应用程序"""
         target = action.get('target', '')
         if not target:
             return
         args = action.get('args', '')
-        if action.get('admin'):
-            ctypes.windll.shell32.ShellExecuteW(
-                None, 'runas', target, args, None, 1
-            )
-        else:
-            if args:
+        try:
+            if action.get('admin'):
                 ctypes.windll.shell32.ShellExecuteW(
-                    None, 'open', target, args, None, 1
+                    None, 'runas', target, args, None, 1
                 )
             else:
-                os.startfile(target)
+                if args:
+                    ctypes.windll.shell32.ShellExecuteW(
+                        None, 'open', target, args, None, 1
+                    )
+                else:
+                    os.startfile(target)
+        except Exception:
+            self._feedback("Failed!")
 
     def _exec_file(self, action: dict):
         """打开文件"""
         target = action.get('target', '')
         if target:
-            os.startfile(target)
+            try:
+                os.startfile(target)
+            except Exception:
+                self._feedback("Failed!")
 
     def _exec_folder(self, action: dict):
         """打开文件夹"""
         target = action.get('target', '')
         if target:
-            os.startfile(target)
+            try:
+                os.startfile(target)
+            except Exception:
+                self._feedback("Failed!")
 
     def _exec_url(self, action: dict):
         """打开 URL"""
@@ -72,6 +93,12 @@ class ActionExecutor:
         if not target:
             return
         shell_type = action.get('shell_type', 'cmd')
+
+        if action.get('show_output') and self._root and self._theme:
+            self._root.after(0, self._show_shell_output,
+                             action.get('label', 'Shell'), target, shell_type)
+            return
+
         if shell_type == 'powershell':
             subprocess.Popen(
                 ['powershell', '-Command', target],
@@ -88,12 +115,16 @@ class ActionExecutor:
                 creationflags=subprocess.CREATE_NO_WINDOW
             )
 
+    def _show_shell_output(self, title, command, shell_type):
+        from ..dialogs.shell_output import ShellOutputDialog
+        ShellOutputDialog(self._root, self._theme, title=title,
+                          command=command, shell_type=shell_type)
+
     def _exec_snippet(self, action: dict):
         """复制文本到剪贴板"""
         target = action.get('target', '')
         if not target:
             return
-        # 使用 ctypes 操作剪贴板，避免依赖 tkinter
         CF_UNICODETEXT = 13
         user32 = ctypes.windll.user32
         kernel32 = ctypes.windll.kernel32
@@ -110,6 +141,7 @@ class ActionExecutor:
                 user32.SetClipboardData(CF_UNICODETEXT, h)
         finally:
             user32.CloseClipboard()
+        self._feedback("Copied!")
 
     def _exec_keys(self, action: dict):
         """模拟按键"""
@@ -118,6 +150,7 @@ class ActionExecutor:
             return
         keys = _parse_keys(target)
         _send_keys(keys)
+        self._feedback("Sent!")
 
     def _exec_combo(self, action: dict):
         """顺序执行组合动作"""
@@ -126,7 +159,19 @@ class ActionExecutor:
         for i, step in enumerate(steps):
             if i > 0:
                 time.sleep(delay)
-            self.execute(step)
+            # combo 内部同步执行，不再开新线程
+            t = step.get('type', '')
+            handler = {
+                'app': self._exec_app,
+                'file': self._exec_file,
+                'folder': self._exec_folder,
+                'url': self._exec_url,
+                'shell': self._exec_shell,
+                'snippet': self._exec_snippet,
+                'keys': self._exec_keys,
+            }.get(t)
+            if handler:
+                handler(step)
 
 
 # ── 按键模拟工具 ──
@@ -135,7 +180,6 @@ INPUT_KEYBOARD = 1
 KEYEVENTF_KEYUP = 0x0002
 KEYEVENTF_EXTENDEDKEY = 0x0001
 
-# 虚拟键码映射
 VK_MAP = {
     'ctrl': 0x11, 'control': 0x11,
     'alt': 0x12, 'menu': 0x12,
@@ -173,7 +217,6 @@ class INPUT(ctypes.Structure):
 
 
 def _parse_keys(combo_str: str) -> list[int]:
-    """解析按键组合字符串，如 'ctrl+shift+a' -> [0x11, 0x10, 0x41]"""
     keys = []
     for part in combo_str.lower().split('+'):
         part = part.strip()
@@ -190,23 +233,19 @@ def _parse_keys(combo_str: str) -> list[int]:
 
 
 def _send_keys(vk_codes: list[int]):
-    """发送按键序列（按下所有键，再依次释放）"""
     if not vk_codes:
         return
     inputs = []
-    # key down
     for vk in vk_codes:
         inp = INPUT(type=INPUT_KEYBOARD)
         inp._input.ki.wVk = vk
         inp._input.ki.dwFlags = 0
         inputs.append(inp)
-    # key up (reverse order)
     for vk in reversed(vk_codes):
         inp = INPUT(type=INPUT_KEYBOARD)
         inp._input.ki.wVk = vk
         inp._input.ki.dwFlags = KEYEVENTF_KEYUP
         inputs.append(inp)
-
     n = len(inputs)
     arr = (INPUT * n)(*inputs)
     ctypes.windll.user32.SendInput(n, arr, ctypes.sizeof(INPUT))

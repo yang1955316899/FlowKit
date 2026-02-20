@@ -50,12 +50,13 @@ class DetailView(BaseView):
         for card in app.cards:
             y += card.render(canvas, 12, y, w - 24) + 6
 
-        # copy toast
+        # toast
         if app._copy_toast_visible:
-            tw = 70
+            msg = getattr(app, '_toast_text', 'Copied!')
+            tw = max(70, len(msg) * 8 + 20)
             tx = (w - tw) // 2
             pill(canvas, tx, y+2, tx+tw, y+20, fill=c['green_glow'])
-            canvas.create_text(w // 2, y + 11, text="Copied!", fill=c['green'],
+            canvas.create_text(w // 2, y + 11, text=msg, fill=c['green'],
                                font=(self._fm, 7, 'bold'))
             y += 26
 

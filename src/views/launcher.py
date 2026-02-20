@@ -55,9 +55,11 @@ class LauncherView(BaseView):
                     action = actions[idx]
                     self._draw_cell(canvas, cx, cy, cell_w, cell_h, action, idx)
                 else:
-                    # empty slot
+                    # empty slot — tagged to prevent click-through to drag
                     rrect(canvas, cx, cy, cx + cell_w, cy + cell_h, 8,
-                          fill=c['card'], outline=c['border_subtle'])
+                          fill=c['card'], outline=c['border_subtle'], tags='lnch_grid')
+                    canvas.create_rectangle(cx, cy, cx + cell_w, cy + cell_h,
+                                            fill='', outline='', tags='lnch_grid')
 
         grid_h = self._rows * (cell_h + cell_gap) - cell_gap
         y += grid_h + 12
@@ -65,6 +67,16 @@ class LauncherView(BaseView):
         # page indicator dots
         if len(pages) > 1:
             y = self._draw_page_dots(canvas, w, y, len(pages))
+
+        # toast
+        if self.app._copy_toast_visible:
+            msg = getattr(self.app, '_toast_text', 'Done!')
+            tw = max(70, len(msg) * 8 + 20)
+            tx = (w - tw) // 2
+            pill(canvas, tx, y+2, tx+tw, y+20, fill=c['green_glow'])
+            canvas.create_text(w // 2, y + 11, text=msg, fill=c['green'],
+                               font=(self._fm, 7, 'bold'))
+            y += 26
 
         return y
 
@@ -137,6 +149,8 @@ class LauncherView(BaseView):
             if tag == 'lnch_add':
                 self._add_action()
                 return True
+            if tag == 'lnch_grid':
+                return True  # 空格子吞掉点击，不触发拖拽
         return False
 
     def on_right_click(self, canvas: Canvas, event, tags: list[str]):
