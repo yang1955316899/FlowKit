@@ -10,6 +10,7 @@ from .core.window import WindowManager
 from .core.scheduler import Scheduler
 from .core.actions import ActionExecutor
 from .core.platform_api import PlatformAPIServer
+from .core.tray import SystemTray
 from .themes.dark import DARK
 from .utils.http import HttpClient
 from .cards.token_stats import TokenStatsCard
@@ -414,9 +415,29 @@ class App:
     def run(self):
         # start hotkey manager
         self._start_hotkey()
+        # start system tray
+        self._tray = SystemTray(
+            on_show=lambda: self.root.after(0, self._tray_show),
+            on_settings=lambda: self.root.after(0, self._tray_settings),
+            on_exit=lambda: self.root.after(0, self.root.destroy),
+        )
+        self._tray.start()
         self.scheduler.start(); self._check_mouse(); self.root.mainloop()
         self._stop_hotkey()
+        self._tray.stop()
         self._api_server.stop()
+
+    def _tray_show(self):
+        """托盘双击 — 显示面板"""
+        self.wm.show_at_position(
+            self.root.winfo_x(), self.root.winfo_y())
+        self.root.focus_force()
+        self.root.lift()
+
+    def _tray_settings(self):
+        """托盘菜单 — 打开设置"""
+        self._tray_show()
+        self._switch_view('settings')
 
     def _start_hotkey(self):
         """启动全局热键和鼠标钩子"""
