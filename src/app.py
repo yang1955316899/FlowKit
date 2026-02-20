@@ -395,6 +395,9 @@ class App:
     def toggle_at_cursor(self):
         """热键/中键回调 — 在光标位置弹出/隐藏面板"""
         if self.wm.is_hidden:
+            # 上下文感知：检测前台窗口，自动切换页面
+            self._apply_context_page()
+
             mx, my = self.wm.get_mouse_pos()
             w = self.config.get('window', {}).get('width', 360)
             h = self.root.winfo_height()
@@ -403,6 +406,26 @@ class App:
             self.root.lift()
         else:
             self.wm.try_hide()
+
+    def _apply_context_page(self):
+        """根据前台窗口进程自动切换到匹配的动作页"""
+        try:
+            from .core.context import get_foreground_process, find_context_page
+            process = get_foreground_process()
+            if not process:
+                return
+            pages = self.config.get('launcher', {}).get('pages', [])
+            idx = find_context_page(pages, process)
+            if idx is not None:
+                # 切换到 launcher 视图并设置页面
+                if self.current_view != 'launcher':
+                    self.current_view = 'launcher'
+                launcher = self._views.get('launcher')
+                if launcher and launcher._current_page != idx:
+                    launcher._current_page = idx
+                    self._render()
+        except Exception:
+            pass
 
     # ── util ──
 
