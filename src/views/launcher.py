@@ -250,6 +250,7 @@ class LauncherView(BaseView):
             if not placed:
                 actions.append(result)
             self.app._save_config()
+            self._refresh_hotkeys()
             self.app._render()
 
     def _edit_action(self, idx):
@@ -266,6 +267,7 @@ class LauncherView(BaseView):
             result['id'] = actions[idx].get('id', str(uuid.uuid4())[:8])
             actions[idx] = result
             self.app._save_config()
+            self._refresh_hotkeys()
             self.app._render()
 
     def _delete_action(self, idx):
@@ -305,6 +307,11 @@ class LauncherView(BaseView):
         if not pages:
             pages.append({'name': '工具', 'actions': []})
             self._current_page = 0
+
+    def _refresh_hotkeys(self):
+        """动作变更后刷新全局快捷键注册"""
+        if hasattr(self.app, '_register_action_hotkeys'):
+            self.app._register_action_hotkeys()
 
     # ── 搜索 ──
 

@@ -182,6 +182,23 @@ class ActionDialog:
                                    fg=theme['dim'], bg=theme['bg'], font=(self._fm, 7))
         self._script_info.pack(anchor='w', pady=(4, 0))
 
+        # hotkey binding (all types)
+        hotkey_frame = Frame(self._form, bg=theme['bg'])
+        hotkey_frame.pack(fill='x', pady=(8, 0))
+        Label(hotkey_frame, text="快捷键", fg=theme['dim'], bg=theme['bg'],
+              font=(self._fm, 7)).pack(side='left')
+        self._hotkey_entry = Entry(hotkey_frame, bg=theme['card'], fg=theme['text'],
+                                    insertbackground=theme['accent'], relief='flat',
+                                    font=(self._fm, 8), bd=0, width=16,
+                                    highlightthickness=1,
+                                    highlightbackground=theme['border_subtle'],
+                                    highlightcolor=theme['accent'])
+        self._hotkey_entry.pack(side='left', padx=(8, 0), ipady=3)
+        if action and action.get('hotkey'):
+            self._hotkey_entry.insert(0, action['hotkey'])
+        Label(hotkey_frame, text="如 ctrl+alt+t", fg=theme['dim'], bg=theme['bg'],
+              font=(self._fm, 6)).pack(side='left', padx=(6, 0))
+
         # icon picker
         self._icon_var = StringVar(value=action.get('icon', '\u2726') if action else '\u2726')
         icon_frame = Frame(self._form, bg=theme['bg'])
@@ -222,7 +239,7 @@ class ActionDialog:
         self._update_shell_pills()
         self._update_output_display()
 
-        dw, dh = 340, 420
+        dw, dh = 340, 450
         self.win.geometry(f"{dw}x{dh}")
         self.win.update_idletasks()
         px = parent.winfo_rootx() + (parent.winfo_width() - dw) // 2
@@ -466,6 +483,10 @@ class ActionDialog:
                 result['code'] = self._script_code
             else:
                 result['path'] = self._script_path
+
+        hotkey = self._hotkey_entry.get().strip()
+        if hotkey:
+            result['hotkey'] = hotkey
 
         self.result = result
         self.win.destroy()

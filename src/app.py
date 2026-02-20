@@ -423,6 +423,7 @@ class App:
         from .core.hotkey import InputHookManager
         launcher_cfg = self.config.get('launcher', {})
         self._hotkey_mgr = InputHookManager()
+        self._action_hotkey_ids = []  # 动作绑定的热键 ID
 
         hotkey = launcher_cfg.get('hotkey', 'ctrl+space')
         if hotkey:
@@ -431,7 +432,28 @@ class App:
         if launcher_cfg.get('middle_click', True):
             self._hotkey_mgr.register_middle_click(lambda: self.root.after(0, self.toggle_at_cursor))
 
+        # 注册动作级快捷键
+        self._register_action_hotkeys()
+
         self._hotkey_mgr.start()
+
+    def _register_action_hotkeys(self):
+        """扫描 config 中带 hotkey 字段的动作并注册全局快捷键"""
+        # 先清除旧的动作热键
+        for hid in self._action_hotkey_ids:
+            self._hotkey_mgr.unregister_hotkey(hid)
+        self._action_hotkey_ids.clear()
+
+        pages = self.config.get('launcher', {}).get('pages', [])
+        for page in pages:
+            for action in page.get('actions', []):
+                if action and action.get('hotkey'):
+                    hk = action['hotkey']
+                    act = action  # 闭包捕获
+                    hid = self._hotkey_mgr.register_hotkey(
+                        hk, lambda a=act: self.root.after(0, self.executor.execute, a))
+                    if hid:
+                        self._action_hotkey_ids.append(hid)
 
     def _stop_hotkey(self):
         """停止热键管理器"""

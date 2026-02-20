@@ -77,14 +77,30 @@ class InputHookManager:
         self._running = False
         self._mouse_hook = None
         self._hook_proc = None  # prevent GC
+        self._pending_register = []  # 运行时追加的热键
+        self._pending_unregister = []  # 运行时移除的热键 ID
 
-    def register_hotkey(self, hotkey_str: str, callback):
-        """注册全局热键，如 'ctrl+space'"""
+    def register_hotkey(self, hotkey_str: str, callback) -> int:
+        """注册全局热键，如 'ctrl+space'，返回热键 ID"""
         mods, vk = self._parse_hotkey(hotkey_str)
-        if vk:
-            hid = self._hotkey_id
-            self._hotkeys[hid] = (mods, vk, callback)
-            self._hotkey_id += 1
+        if not vk:
+            return 0
+        hid = self._hotkey_id
+        self._hotkeys[hid] = (mods, vk, callback)
+        self._hotkey_id += 1
+        # 如果已在运行，通过消息循环注册
+        if self._running and self._thread_id:
+            self._pending_register.append(hid)
+            user32.PostThreadMessageW(self._thread_id, 0x0400, 0, 0)  # WM_USER
+        return hid
+
+    def unregister_hotkey(self, hid: int):
+        """移除已注册的热键"""
+        if hid in self._hotkeys:
+            del self._hotkeys[hid]
+            if self._running and self._thread_id:
+                self._pending_unregister.append(hid)
+                user32.PostThreadMessageW(self._thread_id, 0x0400, 0, 0)
 
     def register_middle_click(self, callback):
         """注册鼠标中键回调"""
@@ -130,6 +146,15 @@ class InputHookManager:
                 entry = self._hotkeys.get(hid)
                 if entry:
                     entry[2]()  # callback
+            elif msg.message == 0x0400:  # WM_USER — 动态热键操作
+                for hid in self._pending_register:
+                    entry = self._hotkeys.get(hid)
+                    if entry:
+                        user32.RegisterHotKey(None, hid, entry[0], entry[1])
+                self._pending_register.clear()
+                for hid in self._pending_unregister:
+                    user32.UnregisterHotKey(None, hid)
+                self._pending_unregister.clear()
             user32.TranslateMessage(ctypes.byref(msg))
             user32.DispatchMessageW(ctypes.byref(msg))
 
