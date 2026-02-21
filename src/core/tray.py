@@ -35,6 +35,13 @@ user32 = ctypes.windll.user32
 shell32 = ctypes.windll.shell32
 kernel32 = ctypes.windll.kernel32
 
+# 设置 DefWindowProcW 的参数类型，避免 64 位 LPARAM 溢出
+user32.DefWindowProcW.argtypes = [
+    ctypes.wintypes.HWND, ctypes.wintypes.UINT,
+    ctypes.wintypes.WPARAM, ctypes.wintypes.LPARAM,
+]
+user32.DefWindowProcW.restype = ctypes.c_longlong
+
 
 class NOTIFYICONDATAW(ctypes.Structure):
     _fields_ = [
@@ -54,9 +61,10 @@ class NOTIFYICONDATAW(ctypes.Structure):
     ]
 
 
-# 窗口过程
+# 窗口过程 — 64 位 Windows 需要 LRESULT (c_longlong)
+LRESULT = ctypes.c_longlong
 WNDPROC = ctypes.WINFUNCTYPE(
-    ctypes.c_long,
+    LRESULT,
     ctypes.wintypes.HWND,
     ctypes.wintypes.UINT,
     ctypes.wintypes.WPARAM,
