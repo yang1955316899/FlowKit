@@ -15,6 +15,7 @@ ACTION_TYPES = [
     ('keys', '按键'),
     ('combo', '组合'),
     ('script', 'Python'),
+    ('group', '分组'),
 ]
 
 # target 字段的标签随类型变化
@@ -28,6 +29,7 @@ TARGET_LABELS = {
     'keys': '按键组合 (如 ctrl+shift+a)',
     'combo': '描述',
     'script': '描述',
+    'group': '分组描述',
 }
 
 
@@ -42,6 +44,7 @@ class ActionDialog:
         self._drag = {'x': 0, 'y': 0}
         self._type_labels = []
         self._action_type = StringVar(value=action.get('type', 'app') if action else 'app')
+        self._group_actions = action.get('actions', []) if action else []
 
         self.win = Toplevel(parent)
         self.win.overrideredirect(True)
@@ -483,6 +486,10 @@ class ActionDialog:
                 result['code'] = self._script_code
             else:
                 result['path'] = self._script_path
+
+        if action_type == 'group':
+            # 保留已有的子动作列表
+            result['actions'] = getattr(self, '_group_actions', [])
 
         hotkey = self._hotkey_entry.get().strip()
         if hotkey:

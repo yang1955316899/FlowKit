@@ -22,6 +22,7 @@ class LauncherView(BaseView):
         self._drag_active = False   # 是否已进入拖拽模式
         self._grid_origin = (0, 0)  # 网格左上角坐标
         self._cell_size = (0, 0)    # 单元格尺寸（含间距）
+        self._open_group = None     # 当前展开的分组动作 ID
 
     @property
     def _pages(self):
@@ -37,6 +38,18 @@ class LauncherView(BaseView):
             self._current_page = len(pages) - 1
 
         page = pages[self._current_page]
+
+        mx = 10
+        cw = w - 20
+
+        # 如果有展开的分组，渲染分组子面板
+        if self._open_group is not None:
+            group_act = self._find_action_by_id(self._open_group)
+            if group_act and group_act.get('type') == 'group':
+                return self._render_group(canvas, w, y, group_act)
+            else:
+                self._open_group = None
+
         actions = page.get('actions', [])
 
         mx = 10
@@ -156,6 +169,14 @@ class LauncherView(BaseView):
         # invisible click area
         canvas.create_rectangle(x, y, x + w, y + h, fill='', outline='', tags=tag)
 
+        # group badge
+        if action.get('type') == 'group':
+            child_count = len([a for a in action.get('actions', []) if a])
+            if child_count:
+                canvas.create_text(x + w - 6, y + 6, text=str(child_count),
+                                   fill=c['accent'], font=(self._fm, 5),
+                                   anchor='ne', tags=tag)
+
     def _draw_page_dots(self, canvas, w, y, total):
         c = self.theme
         dot_r = 3
@@ -172,6 +193,66 @@ class LauncherView(BaseView):
                 canvas.create_oval(dx, y, dx + dot_r * 2, y + dot_r * 2,
                                    fill=c['dim'], outline='')
         return y + dot_r * 2 + 8
+
+    def _render_group(self, canvas, w, y, group_act):
+        """渲染分组子面板"""
+        c = self.theme
+        mx = 10
+        cw = w - 20
+        actions = group_act.get('actions', [])
+
+        # 返回按钮 + 分组名
+        back_tag = 'grp_back'
+        rrect(canvas, mx, y, mx + 28, y + 24, 8, fill=c['card'], tags=back_tag)
+        canvas.create_text(mx + 14, y + 12, text="←", fill=c['accent'],
+                           font=(self._f, 10), tags=back_tag)
+        canvas.create_rectangle(mx, y, mx + 28, y + 24,
+                                fill='', outline='', tags=back_tag)
+
+        icon = group_act.get('icon', '📂')
+        label = group_act.get('label', '分组')
+        canvas.create_text(mx + 36, y + 12, text=f"{icon} {label}",
+                           fill=c['text'], font=(self._f, 8), anchor='w')
+        y += 32
+
+        # 子动作网格
+        cell_gap = 6
+        cell_w = (cw - (self._cols - 1) * cell_gap) // self._cols
+        cell_h = 52
+
+        self._grid_origin = (mx, y)
+        self._cell_size = (cell_w + cell_gap, cell_h + cell_gap)
+
+        for row in range(self._rows):
+            for col in range(self._cols):
+                idx = row * self._cols + col
+                cx = mx + col * (cell_w + cell_gap)
+                cy = y + row * (cell_h + cell_gap)
+
+                if idx < len(actions) and actions[idx] is not None:
+                    self._draw_cell(canvas, cx, cy, cell_w, cell_h,
+                                    actions[idx], idx)
+                else:
+                    rrect(canvas, cx, cy, cx + cell_w, cy + cell_h, 8,
+                          fill=c['card'], outline=c['border_subtle'],
+                          tags='lnch_grid')
+                    canvas.create_rectangle(cx, cy, cx + cell_w, cy + cell_h,
+                                            fill='', outline='', tags='lnch_grid')
+
+        grid_h = self._rows * (cell_h + cell_gap) - cell_gap
+        y += grid_h + 12
+
+        # toast
+        if self.app._copy_toast_visible:
+            msg = getattr(self.app, '_toast_text', '完成!')
+            tw = max(70, len(msg) * 8 + 20)
+            tx = (w - tw) // 2
+            pill(canvas, tx, y + 2, tx + tw, y + 20, fill=c['green_glow'])
+            canvas.create_text(w // 2, y + 11, text=msg, fill=c['green'],
+                               font=(self._fm, 7, 'bold'))
+            y += 26
+
+        return y
 
     def _draw_empty(self, canvas, w, y):
         c = self.theme
@@ -196,12 +277,17 @@ class LauncherView(BaseView):
 
     def on_click(self, canvas: Canvas, event, tags: list[str]) -> bool:
         for tag in tags:
+            if tag == 'grp_back':
+                self._open_group = None
+                self.app._render()
+                return True
             if tag.startswith('act_'):
                 idx = int(tag[4:])
-                # 记录按下位置，可能开始拖拽
-                self._drag_idx = idx
-                self._drag_start_xy = (event.x, event.y)
-                self._drag_active = False
+                # 分组内不支持拖拽
+                if self._open_group is None:
+                    self._drag_idx = idx
+                    self._drag_start_xy = (event.x, event.y)
+                    self._drag_active = False
                 self._execute_action(idx)
                 return True
             if tag == 'lnch_add':
@@ -301,6 +387,24 @@ class LauncherView(BaseView):
                     activeforeground='#fff',
                     font=(self._f, 9))
 
+        # 分组子面板内的右键菜单
+        if self._open_group is not None:
+            group_act = self._find_action_by_id(self._open_group)
+            if group_act:
+                if action_idx is not None:
+                    menu.add_command(label="编辑",
+                                     command=lambda: self._edit_group_child(action_idx))
+                    menu.add_command(label="删除",
+                                     command=lambda: self._delete_group_child(action_idx))
+                    menu.add_separator()
+                menu.add_command(label="添加子动作",
+                                 command=self._add_group_child)
+                menu.add_separator()
+                menu.add_command(label="返回",
+                                 command=self._close_group)
+            menu.tk_popup(event.x_root, event.y_root)
+            return
+
         if action_idx is not None:
             menu.add_command(label="编辑", command=lambda: self._edit_action(action_idx))
             menu.add_command(label="删除", command=lambda: self._delete_action(action_idx))
@@ -321,6 +425,8 @@ class LauncherView(BaseView):
 
     def on_scroll(self, event):
         """鼠标滚轮切换分页"""
+        if self._open_group is not None:
+            return  # 分组内不切换页面
         pages = self._pages
         if len(pages) <= 1:
             return
@@ -331,12 +437,31 @@ class LauncherView(BaseView):
         self.app._render()
 
     def _execute_action(self, idx):
+        # 如果在分组子面板中，执行分组内的动作
+        if self._open_group is not None:
+            group_act = self._find_action_by_id(self._open_group)
+            if group_act:
+                children = group_act.get('actions', [])
+                if idx < len(children) and children[idx] is not None:
+                    self.app.executor.execute(children[idx])
+            return
+
         pages = self._pages
         if self._current_page >= len(pages):
             return
         actions = pages[self._current_page].get('actions', [])
         if idx < len(actions) and actions[idx] is not None:
-            self.app.executor.execute(actions[idx])
+            action = actions[idx]
+            if action.get('type') == 'group':
+                # 展开/收起分组
+                aid = action.get('id')
+                if self._open_group == aid:
+                    self._open_group = None
+                else:
+                    self._open_group = aid
+                self.app._render()
+            else:
+                self.app.executor.execute(action)
 
     def _add_action(self):
         from ..dialogs.action_dialog import ActionDialog
@@ -415,6 +540,14 @@ class LauncherView(BaseView):
         if not pages:
             pages.append({'name': '工具', 'actions': []})
             self._current_page = 0
+
+    def _find_action_by_id(self, action_id: str) -> dict | None:
+        """在所有页面中查找指定 ID 的动作"""
+        for page in self._pages:
+            for act in page.get('actions', []):
+                if act and act.get('id') == action_id:
+                    return act
+        return None
 
     def _refresh_hotkeys(self):
         """动作变更后刷新全局快捷键注册"""
@@ -559,6 +692,63 @@ class LauncherView(BaseView):
         py = root.winfo_rooty() + 42
         dlg.geometry(f"+{px}+{py}")
         entry.focus_set()
+
+    # ── 分组子动作管理 ──
+
+    def _close_group(self):
+        self._open_group = None
+        self.app._render()
+
+    def _add_group_child(self):
+        """在当前展开的分组中添加子动作"""
+        group_act = self._find_action_by_id(self._open_group)
+        if not group_act:
+            return
+        from ..dialogs.action_dialog import ActionDialog
+        result = ActionDialog(self.app.root, self.theme,
+                              executor=self.app.executor).show()
+        if result:
+            # 分组内不允许嵌套分组
+            if result.get('type') == 'group':
+                self.app._show_toast("分组内不能嵌套分组!")
+                return
+            result['id'] = str(uuid.uuid4())[:8]
+            children = group_act.setdefault('actions', [])
+            children.append(result)
+            self.app._save_config()
+            self.app._render()
+
+    def _edit_group_child(self, idx):
+        """编辑分组内的子动作"""
+        group_act = self._find_action_by_id(self._open_group)
+        if not group_act:
+            return
+        children = group_act.get('actions', [])
+        if idx >= len(children) or children[idx] is None:
+            return
+        from ..dialogs.action_dialog import ActionDialog
+        result = ActionDialog(self.app.root, self.theme,
+                              action=children[idx],
+                              executor=self.app.executor).show()
+        if result:
+            result['id'] = children[idx].get('id', str(uuid.uuid4())[:8])
+            children[idx] = result
+            self.app._save_config()
+            self.app._render()
+
+    def _delete_group_child(self, idx):
+        """删除分组内的子动作"""
+        group_act = self._find_action_by_id(self._open_group)
+        if not group_act:
+            return
+        children = group_act.get('actions', [])
+        if idx < len(children):
+            children[idx] = None
+            # 清理尾部 None
+            while children and children[-1] is None:
+                children.pop()
+            self.app._save_config()
+            self.app._render()
 
     # ── 导入/导出 ──
 
