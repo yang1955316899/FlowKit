@@ -56,6 +56,15 @@
 - [x] 新建 src/dialogs/selection_popup.py — 浮窗 UI（复制/搜索/翻译）
 - [x] 修改 app.py/settings.py — 集成开关
 
-## 剩余（低优先级）
-- [ ] Phase 9.3-9.4 — 在线动作商店 (P3)
-- [ ] Phase 10 — 高级平台 API (P4)
+## 批次 13：Phase 10 — 高级平台 API (P4) ✅
+- [x] 扩展 platform_api.py — fs/process/registry/network/screen/timer
+- [x] 扩展 platform_sdk.py — 对应客户端 SDK 类
+
+## 批次 14：Phase 9.3-9.4 — 动作商店 (P3) ✅
+- [x] 新建 src/core/store.py — 本地商店仓库管理
+- [x] 新建 src/dialogs/store_dialog.py — 商店浏览/安装界面
+- [x] 新建 src/dialogs/publish_dialog.py — 发布对话框
+- [x] 修改 launcher.py — 右键菜单集成商店入口
+- [x] 修改 app.py — 初始化商店实例
+
+## 🎉 全部 Phase 6-10 已完成！
