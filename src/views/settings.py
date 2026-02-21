@@ -1,7 +1,7 @@
 """设置视图"""
 
 import time
-from tkinter import Canvas, Entry, Frame, Label, Toplevel, StringVar
+from tkinter import Canvas, Entry, Frame, Label, Toplevel
 from .base import BaseView
 from ..widgets.draw import rrect, pill
 
@@ -251,6 +251,7 @@ class SettingsView(BaseView):
 
         entry.bind('<Return>', save)
         dlg.bind('<Escape>', lambda e: dlg.destroy())
+        dlg.bind('<FocusOut>', lambda e: dlg.after(200, dlg.destroy))
         entry.focus_set()
 
         dw, dh = 240, 80
@@ -319,6 +320,7 @@ class SettingsView(BaseView):
         col_e.bind('<Return>', save)
         row_e.bind('<Return>', save)
         dlg.bind('<Escape>', lambda e: dlg.destroy())
+        dlg.bind('<FocusOut>', lambda e: dlg.after(200, dlg.destroy))
         col_e.focus_set()
 
         dw, dh = 240, 80

@@ -28,8 +28,9 @@ def get_foreground_process() -> str:
     try:
         buf = ctypes.create_unicode_buffer(260)
         size = ctypes.wintypes.DWORD(260)
-        # QueryFullProcessImageNameW
-        kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size))
+        ret = kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size))
+        if not ret:
+            return ''
         full_path = buf.value
         return os.path.basename(full_path) if full_path else ''
     finally:

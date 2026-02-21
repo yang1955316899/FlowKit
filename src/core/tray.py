@@ -3,9 +3,6 @@
 import ctypes
 import ctypes.wintypes
 import threading
-import struct
-import os
-import tempfile
 
 
 # Shell_NotifyIconW 常量

@@ -716,6 +716,8 @@ class PlatformAPIServer:
         elif p.is_dir():
             import shutil
             shutil.rmtree(str(p))
+        else:
+            raise FileNotFoundError(f'路径不存在: {path}')
         return True
 
     def _fs_copy(self, src: str = '', dst: str = '') -> bool:
@@ -725,6 +727,8 @@ class PlatformAPIServer:
             shutil.copy2(src, dst)
         elif s.is_dir():
             shutil.copytree(src, dst, dirs_exist_ok=True)
+        else:
+            raise FileNotFoundError(f'源路径不存在: {src}')
         return True
 
     def _fs_move(self, src: str = '', dst: str = '') -> bool:
@@ -845,9 +849,11 @@ class PlatformAPIServer:
         """获取本机局域网 IP"""
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(('8.8.8.8', 80))
-            ip = s.getsockname()[0]
-            s.close()
+            try:
+                s.connect(('8.8.8.8', 80))
+                ip = s.getsockname()[0]
+            finally:
+                s.close()
             return ip
         except Exception:
             return '127.0.0.1'
@@ -861,14 +867,23 @@ class PlatformAPIServer:
         connections = []
         for line in r.stdout.strip().split('\n'):
             parts = line.split()
-            if len(parts) >= 5 and parts[0] in ('TCP', 'UDP'):
-                connections.append({
-                    'proto': parts[0],
-                    'local': parts[1],
-                    'remote': parts[2] if parts[0] == 'TCP' else '',
-                    'state': parts[3] if parts[0] == 'TCP' else '',
-                    'pid': int(parts[-1]) if parts[-1].isdigit() else 0,
-                })
+            if len(parts) >= 4 and parts[0] in ('TCP', 'UDP'):
+                if parts[0] == 'TCP' and len(parts) >= 5:
+                    connections.append({
+                        'proto': 'TCP',
+                        'local': parts[1],
+                        'remote': parts[2],
+                        'state': parts[3],
+                        'pid': int(parts[4]) if parts[4].isdigit() else 0,
+                    })
+                elif parts[0] == 'UDP':
+                    connections.append({
+                        'proto': 'UDP',
+                        'local': parts[1],
+                        'remote': '',
+                        'state': '',
+                        'pid': int(parts[-1]) if parts[-1].isdigit() else 0,
+                    })
         return connections
 
     # ── 屏幕 API ──
@@ -876,15 +891,19 @@ class PlatformAPIServer:
     def _screen_info(self) -> dict:
         """获取屏幕信息"""
         user32 = ctypes.windll.user32
+        try:
+            dpi = user32.GetDpiForSystem()
+        except Exception:
+            dpi = 96
         return {
             'width': user32.GetSystemMetrics(0),
             'height': user32.GetSystemMetrics(1),
-            'dpi': user32.GetDpiForSystem() if hasattr(user32, 'GetDpiForSystem') else 96,
+            'dpi': dpi,
         }
 
     def _screen_screenshot(self, path: str = '', x: int = 0, y: int = 0,
                            w: int = 0, h: int = 0) -> str:
-        """截取屏幕区域保存为 PNG"""
+        """截取屏幕区域保存为 BMP"""
         user32 = ctypes.windll.user32
         gdi32 = ctypes.windll.gdi32
 
@@ -893,13 +912,13 @@ class PlatformAPIServer:
         if h <= 0:
             h = user32.GetSystemMetrics(1)
         if not path:
-            path = str(Path.home() / f'screenshot_{int(time.time())}.png')
+            path = str(Path.home() / f'screenshot_{int(time.time())}.bmp')
 
         # 使用 GDI 截图
         hdc_screen = user32.GetDC(0)
         hdc_mem = gdi32.CreateCompatibleDC(hdc_screen)
         hbmp = gdi32.CreateCompatibleBitmap(hdc_screen, w, h)
-        gdi32.SelectObject(hdc_mem, hbmp)
+        old_bmp = gdi32.SelectObject(hdc_mem, hbmp)
         gdi32.BitBlt(hdc_mem, 0, 0, w, h, hdc_screen, x, y, 0x00CC0020)  # SRCCOPY
 
         # 读取位图数据
@@ -926,6 +945,7 @@ class PlatformAPIServer:
         gdi32.GetDIBits(hdc_mem, hbmp, 0, h, buf, ctypes.byref(bmi), 0)
 
         # 清理 GDI
+        gdi32.SelectObject(hdc_mem, old_bmp)
         gdi32.DeleteObject(hbmp)
         gdi32.DeleteDC(hdc_mem)
         user32.ReleaseDC(0, hdc_screen)

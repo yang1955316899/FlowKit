@@ -1,6 +1,6 @@
 """动作发布对话框"""
 
-from tkinter import Toplevel, Frame, Label, Entry, Canvas, StringVar
+from tkinter import Toplevel, Frame, Label, Entry, Canvas
 from ..widgets.draw import rr_points
 
 

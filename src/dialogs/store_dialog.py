@@ -1,9 +1,8 @@
 """动作商店浏览对话框"""
 
-import time
 from tkinter import (Toplevel, Frame, Label, Entry, Canvas, StringVar,
-                     Scrollbar, Listbox)
-from ..widgets.draw import rrect, rr_points
+                     Scrollbar)
+from ..widgets.draw import rrect
 
 
 class StoreDialog:

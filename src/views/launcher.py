@@ -1,7 +1,7 @@
 """启动器网格视图"""
 
 import uuid
-from tkinter import Canvas, Menu, Toplevel, Entry, Frame, Label, StringVar, filedialog, messagebox
+from tkinter import Canvas, Menu, Toplevel, Entry, Frame, Label, StringVar, filedialog
 from .base import BaseView
 from ..widgets.draw import rrect, pill
 
@@ -51,9 +51,6 @@ class LauncherView(BaseView):
                 self._open_group = None
 
         actions = page.get('actions', [])
-
-        mx = 10
-        cw = w - 20
 
         # search bar
         sb_h = 24
@@ -681,7 +678,10 @@ class LauncherView(BaseView):
 
         def close(event=None):
             self._search_active = False
-            dlg.destroy()
+            try:
+                dlg.destroy()
+            except Exception:
+                pass
 
         search_var.trace_add('write', update_results)
         entry.bind('<KeyPress>', on_key)
@@ -978,7 +978,7 @@ class LauncherView(BaseView):
         if result:
             icon = action.get('icon', '📦')
             item_id = self.app.store.publish(
-                action=result['action'],
+                action=action,
                 name=result['name'],
                 description=result['description'],
                 author=result['author'],
@@ -999,14 +999,13 @@ class LauncherView(BaseView):
         from ..dialogs.publish_dialog import PublishDialog
         result = PublishDialog(self.app.root, self.theme, page=page).show()
         if result:
-            icon = '📄'
             item_id = self.app.store.publish(
-                page=result['page'],
+                page=page,
                 name=result['name'],
                 description=result['description'],
                 author=result['author'],
                 category=result['category'],
-                icon=icon)
+                icon='📄')
             if item_id:
                 self.app._show_toast("页面发布成功!")
             else:
