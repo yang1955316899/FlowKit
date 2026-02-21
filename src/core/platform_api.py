@@ -7,6 +7,8 @@ import ctypes
 import ctypes.wintypes
 import os
 import subprocess
+import time
+import winreg
 import requests as _requests
 from pathlib import Path
 
@@ -62,6 +64,34 @@ class PlatformAPIServer:
             # 存储
             'store.get': self._store_get,
             'store.set': self._store_set,
+            # 文件系统
+            'fs.read': self._fs_read,
+            'fs.write': self._fs_write,
+            'fs.append': self._fs_append,
+            'fs.list': self._fs_list,
+            'fs.info': self._fs_info,
+            'fs.exists': self._fs_exists,
+            'fs.mkdir': self._fs_mkdir,
+            'fs.delete': self._fs_delete,
+            'fs.copy': self._fs_copy,
+            'fs.move': self._fs_move,
+            # 进程
+            'process.list': self._process_list,
+            'process.kill': self._process_kill,
+            'process.start': self._process_start,
+            # 注册表
+            'registry.read': self._registry_read,
+            'registry.write': self._registry_write,
+            'registry.delete': self._registry_delete,
+            # 网络
+            'network.local_ip': self._network_local_ip,
+            'network.connections': self._network_connections,
+            # 屏幕
+            'screen.info': self._screen_info,
+            'screen.screenshot': self._screen_screenshot,
+            'screen.pixel_color': self._screen_pixel_color,
+            # 定时器
+            'timer.sleep': self._timer_sleep,
         }
 
     @property
@@ -626,4 +656,321 @@ class PlatformAPIServer:
     def _store_set(self, key: str = '', value=None) -> bool:
         self._store[key] = value
         self._save_store()
+        return True
+
+    # ── 文件系统 API ──
+
+    def _fs_read(self, path: str = '', encoding: str = 'utf-8') -> str:
+        return Path(path).read_text(encoding=encoding)
+
+    def _fs_write(self, path: str = '', content: str = '', encoding: str = 'utf-8') -> bool:
+        Path(path).write_text(content, encoding=encoding)
+        return True
+
+    def _fs_append(self, path: str = '', content: str = '', encoding: str = 'utf-8') -> bool:
+        with open(path, 'a', encoding=encoding) as f:
+            f.write(content)
+        return True
+
+    def _fs_list(self, path: str = '', pattern: str = '*') -> list:
+        p = Path(path)
+        if not p.is_dir():
+            return []
+        items = []
+        for entry in p.glob(pattern):
+            items.append({
+                'name': entry.name,
+                'path': str(entry),
+                'is_dir': entry.is_dir(),
+                'size': entry.stat().st_size if entry.is_file() else 0,
+            })
+        return items
+
+    def _fs_info(self, path: str = '') -> dict:
+        p = Path(path)
+        if not p.exists():
+            return {'exists': False}
+        st = p.stat()
+        return {
+            'exists': True,
+            'name': p.name,
+            'path': str(p.resolve()),
+            'is_dir': p.is_dir(),
+            'is_file': p.is_file(),
+            'size': st.st_size,
+            'modified': st.st_mtime,
+            'created': st.st_ctime,
+        }
+
+    def _fs_exists(self, path: str = '') -> bool:
+        return Path(path).exists()
+
+    def _fs_mkdir(self, path: str = '') -> bool:
+        Path(path).mkdir(parents=True, exist_ok=True)
+        return True
+
+    def _fs_delete(self, path: str = '') -> bool:
+        p = Path(path)
+        if p.is_file():
+            p.unlink()
+        elif p.is_dir():
+            import shutil
+            shutil.rmtree(str(p))
+        return True
+
+    def _fs_copy(self, src: str = '', dst: str = '') -> bool:
+        import shutil
+        s = Path(src)
+        if s.is_file():
+            shutil.copy2(src, dst)
+        elif s.is_dir():
+            shutil.copytree(src, dst, dirs_exist_ok=True)
+        return True
+
+    def _fs_move(self, src: str = '', dst: str = '') -> bool:
+        import shutil
+        shutil.move(src, dst)
+        return True
+
+    # ── 进程 API ──
+
+    def _process_list(self, name: str = None) -> list:
+        """列出进程，可选按名称过滤"""
+        r = subprocess.run(
+            ['tasklist', '/FO', 'CSV', '/NH'],
+            capture_output=True, text=True, encoding='utf-8', errors='replace',
+            creationflags=subprocess.CREATE_NO_WINDOW)
+        processes = []
+        for line in r.stdout.strip().split('\n'):
+            if not line.strip():
+                continue
+            parts = line.strip().strip('"').split('","')
+            if len(parts) >= 5:
+                pname = parts[0]
+                if name and name.lower() not in pname.lower():
+                    continue
+                try:
+                    pid = int(parts[1])
+                    mem = parts[4].replace(',', '').replace(' K', '').replace('\xa0', '')
+                    mem_kb = int(mem) if mem.isdigit() else 0
+                except (ValueError, IndexError):
+                    pid = 0
+                    mem_kb = 0
+                processes.append({
+                    'name': pname,
+                    'pid': pid,
+                    'session': parts[2] if len(parts) > 2 else '',
+                    'memory_kb': mem_kb,
+                })
+        return processes
+
+    def _process_kill(self, pid: int = 0, name: str = None) -> bool:
+        """终止进程（按 PID 或名称）"""
+        if pid:
+            subprocess.run(['taskkill', '/F', '/PID', str(pid)],
+                           creationflags=subprocess.CREATE_NO_WINDOW)
+        elif name:
+            subprocess.run(['taskkill', '/F', '/IM', name],
+                           creationflags=subprocess.CREATE_NO_WINDOW)
+        return True
+
+    def _process_start(self, cmd: str = '', detached: bool = True) -> int:
+        """启动新进程，返回 PID"""
+        flags = subprocess.CREATE_NO_WINDOW
+        if detached:
+            flags |= subprocess.DETACHED_PROCESS
+        proc = subprocess.Popen(cmd, shell=True, creationflags=flags)
+        return proc.pid
+
+    # ── 注册表 API ──
+
+    _REG_ROOTS = {
+        'HKCU': winreg.HKEY_CURRENT_USER,
+        'HKLM': winreg.HKEY_LOCAL_MACHINE,
+        'HKCR': winreg.HKEY_CLASSES_ROOT,
+        'HKU': winreg.HKEY_USERS,
+        'HKCC': winreg.HKEY_CURRENT_CONFIG,
+    }
+
+    def _parse_reg_path(self, path: str):
+        """解析 'HKCU\\Software\\...' 为 (root_key, subpath)"""
+        parts = path.split('\\', 1)
+        root_name = parts[0].upper()
+        root = self._REG_ROOTS.get(root_name)
+        if not root:
+            raise ValueError(f'Unknown registry root: {root_name}')
+        subpath = parts[1] if len(parts) > 1 else ''
+        return root, subpath
+
+    def _registry_read(self, path: str = '', name: str = '') -> str | int | None:
+        """读取注册表值"""
+        root, subpath = self._parse_reg_path(path)
+        try:
+            with winreg.OpenKey(root, subpath) as key:
+                value, _ = winreg.QueryValueEx(key, name)
+                return value
+        except FileNotFoundError:
+            return None
+
+    def _registry_write(self, path: str = '', name: str = '',
+                        value='', value_type: str = 'sz') -> bool:
+        """写入注册表值"""
+        root, subpath = self._parse_reg_path(path)
+        type_map = {
+            'sz': winreg.REG_SZ,
+            'expand_sz': winreg.REG_EXPAND_SZ,
+            'dword': winreg.REG_DWORD,
+            'qword': winreg.REG_QWORD,
+        }
+        reg_type = type_map.get(value_type, winreg.REG_SZ)
+        if reg_type in (winreg.REG_DWORD, winreg.REG_QWORD):
+            value = int(value)
+        with winreg.CreateKey(root, subpath) as key:
+            winreg.SetValueEx(key, name, 0, reg_type, value)
+        return True
+
+    def _registry_delete(self, path: str = '', name: str = '') -> bool:
+        """删除注册表值"""
+        root, subpath = self._parse_reg_path(path)
+        try:
+            with winreg.OpenKey(root, subpath, 0, winreg.KEY_SET_VALUE) as key:
+                winreg.DeleteValue(key, name)
+        except FileNotFoundError:
+            pass
+        return True
+
+    # ── 网络 API ──
+
+    def _network_local_ip(self) -> str:
+        """获取本机局域网 IP"""
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(('8.8.8.8', 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except Exception:
+            return '127.0.0.1'
+
+    def _network_connections(self) -> list:
+        """获取当前网络连接列表"""
+        r = subprocess.run(
+            ['netstat', '-ano'],
+            capture_output=True, text=True, encoding='utf-8', errors='replace',
+            creationflags=subprocess.CREATE_NO_WINDOW)
+        connections = []
+        for line in r.stdout.strip().split('\n'):
+            parts = line.split()
+            if len(parts) >= 5 and parts[0] in ('TCP', 'UDP'):
+                connections.append({
+                    'proto': parts[0],
+                    'local': parts[1],
+                    'remote': parts[2] if parts[0] == 'TCP' else '',
+                    'state': parts[3] if parts[0] == 'TCP' else '',
+                    'pid': int(parts[-1]) if parts[-1].isdigit() else 0,
+                })
+        return connections
+
+    # ── 屏幕 API ──
+
+    def _screen_info(self) -> dict:
+        """获取屏幕信息"""
+        user32 = ctypes.windll.user32
+        return {
+            'width': user32.GetSystemMetrics(0),
+            'height': user32.GetSystemMetrics(1),
+            'dpi': user32.GetDpiForSystem() if hasattr(user32, 'GetDpiForSystem') else 96,
+        }
+
+    def _screen_screenshot(self, path: str = '', x: int = 0, y: int = 0,
+                           w: int = 0, h: int = 0) -> str:
+        """截取屏幕区域保存为 PNG"""
+        user32 = ctypes.windll.user32
+        gdi32 = ctypes.windll.gdi32
+
+        if w <= 0:
+            w = user32.GetSystemMetrics(0)
+        if h <= 0:
+            h = user32.GetSystemMetrics(1)
+        if not path:
+            path = str(Path.home() / f'screenshot_{int(time.time())}.png')
+
+        # 使用 GDI 截图
+        hdc_screen = user32.GetDC(0)
+        hdc_mem = gdi32.CreateCompatibleDC(hdc_screen)
+        hbmp = gdi32.CreateCompatibleBitmap(hdc_screen, w, h)
+        gdi32.SelectObject(hdc_mem, hbmp)
+        gdi32.BitBlt(hdc_mem, 0, 0, w, h, hdc_screen, x, y, 0x00CC0020)  # SRCCOPY
+
+        # 读取位图数据
+        class BITMAPINFOHEADER(ctypes.Structure):
+            _fields_ = [
+                ('biSize', ctypes.c_uint32), ('biWidth', ctypes.c_int32),
+                ('biHeight', ctypes.c_int32), ('biPlanes', ctypes.c_uint16),
+                ('biBitCount', ctypes.c_uint16), ('biCompression', ctypes.c_uint32),
+                ('biSizeImage', ctypes.c_uint32), ('biXPelsPerMeter', ctypes.c_int32),
+                ('biYPelsPerMeter', ctypes.c_int32), ('biClrUsed', ctypes.c_uint32),
+                ('biClrImportant', ctypes.c_uint32),
+            ]
+
+        bmi = BITMAPINFOHEADER()
+        bmi.biSize = ctypes.sizeof(BITMAPINFOHEADER)
+        bmi.biWidth = w
+        bmi.biHeight = -h  # top-down
+        bmi.biPlanes = 1
+        bmi.biBitCount = 32
+        bmi.biCompression = 0  # BI_RGB
+
+        buf_size = w * h * 4
+        buf = ctypes.create_string_buffer(buf_size)
+        gdi32.GetDIBits(hdc_mem, hbmp, 0, h, buf, ctypes.byref(bmi), 0)
+
+        # 清理 GDI
+        gdi32.DeleteObject(hbmp)
+        gdi32.DeleteDC(hdc_mem)
+        user32.ReleaseDC(0, hdc_screen)
+
+        # 写入 BMP 然后转 PNG（纯 ctypes 方案，写 BMP）
+        # 简化：直接写 BMP 文件
+        if not path.lower().endswith('.bmp'):
+            bmp_path = path.rsplit('.', 1)[0] + '.bmp'
+        else:
+            bmp_path = path
+
+        import struct
+        file_size = 54 + buf_size
+        with open(bmp_path, 'wb') as f:
+            # BMP file header
+            f.write(b'BM')
+            f.write(struct.pack('<I', file_size))
+            f.write(struct.pack('<HH', 0, 0))
+            f.write(struct.pack('<I', 54))
+            # DIB header
+            f.write(struct.pack('<I', 40))
+            f.write(struct.pack('<i', w))
+            f.write(struct.pack('<i', -h))
+            f.write(struct.pack('<HH', 1, 32))
+            f.write(struct.pack('<I', 0))
+            f.write(struct.pack('<I', buf_size))
+            f.write(struct.pack('<ii', 0, 0))
+            f.write(struct.pack('<II', 0, 0))
+            f.write(buf.raw)
+
+        return bmp_path
+
+    def _screen_pixel_color(self, x: int = 0, y: int = 0) -> str:
+        """获取屏幕指定位置的像素颜色（#RRGGBB）"""
+        hdc = ctypes.windll.user32.GetDC(0)
+        color = ctypes.windll.gdi32.GetPixel(hdc, x, y)
+        ctypes.windll.user32.ReleaseDC(0, hdc)
+        r = color & 0xFF
+        g = (color >> 8) & 0xFF
+        b = (color >> 16) & 0xFF
+        return f'#{r:02x}{g:02x}{b:02x}'
+
+    # ── 定时器 API ──
+
+    def _timer_sleep(self, ms: int = 0) -> bool:
+        """延时（毫秒）"""
+        time.sleep(ms / 1000.0)
         return True

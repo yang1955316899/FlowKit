@@ -191,6 +191,94 @@ class _Store:
         _conn.call('store.set', key=key, value=value)
 
 
+class _FileSystem:
+    def read(self, path: str, encoding: str = 'utf-8') -> str:
+        return _conn.call('fs.read', path=path, encoding=encoding) or ''
+
+    def write(self, path: str, content: str, encoding: str = 'utf-8'):
+        _conn.call('fs.write', path=path, content=content, encoding=encoding)
+
+    def append(self, path: str, content: str, encoding: str = 'utf-8'):
+        _conn.call('fs.append', path=path, content=content, encoding=encoding)
+
+    def list(self, path: str, pattern: str = '*') -> list[dict]:
+        return _conn.call('fs.list', path=path, pattern=pattern) or []
+
+    def info(self, path: str) -> dict:
+        return _conn.call('fs.info', path=path) or {}
+
+    def exists(self, path: str) -> bool:
+        return _conn.call('fs.exists', path=path) or False
+
+    def mkdir(self, path: str):
+        _conn.call('fs.mkdir', path=path)
+
+    def delete(self, path: str):
+        _conn.call('fs.delete', path=path)
+
+    def copy(self, src: str, dst: str):
+        _conn.call('fs.copy', src=src, dst=dst)
+
+    def move(self, src: str, dst: str):
+        _conn.call('fs.move', src=src, dst=dst)
+
+
+class _Process:
+    def list(self, name: str = None) -> list[dict]:
+        params = {}
+        if name is not None:
+            params['name'] = name
+        return _conn.call('process.list', **params) or []
+
+    def kill(self, pid: int = 0, name: str = None):
+        params = {}
+        if pid:
+            params['pid'] = pid
+        if name:
+            params['name'] = name
+        _conn.call('process.kill', **params)
+
+    def start(self, cmd: str, detached: bool = True) -> int:
+        return _conn.call('process.start', cmd=cmd, detached=detached) or 0
+
+
+class _Registry:
+    def read(self, path: str, name: str = '') -> str | int | None:
+        return _conn.call('registry.read', path=path, name=name)
+
+    def write(self, path: str, name: str = '', value='', value_type: str = 'sz'):
+        _conn.call('registry.write', path=path, name=name,
+                    value=value, value_type=value_type)
+
+    def delete(self, path: str, name: str = ''):
+        _conn.call('registry.delete', path=path, name=name)
+
+
+class _Network:
+    def local_ip(self) -> str:
+        return _conn.call('network.local_ip') or '127.0.0.1'
+
+    def connections(self) -> list[dict]:
+        return _conn.call('network.connections') or []
+
+
+class _Screen:
+    def info(self) -> dict:
+        return _conn.call('screen.info') or {}
+
+    def screenshot(self, path: str = '', x: int = 0, y: int = 0,
+                   w: int = 0, h: int = 0) -> str:
+        return _conn.call('screen.screenshot', path=path, x=x, y=y, w=w, h=h) or ''
+
+    def pixel_color(self, x: int, y: int) -> str:
+        return _conn.call('screen.pixel_color', x=x, y=y) or '#000000'
+
+
+class _Timer:
+    def sleep(self, ms: int):
+        _conn.call('timer.sleep', ms=ms)
+
+
 class Context:
     """平台 API 上下文 — 用户脚本通过 ctx.xxx 调用"""
 
@@ -203,6 +291,12 @@ class Context:
         self.mouse = _Mouse()
         self.system = _System()
         self.store = _Store()
+        self.fs = _FileSystem()
+        self.process = _Process()
+        self.registry = _Registry()
+        self.network = _Network()
+        self.screen = _Screen()
+        self.timer = _Timer()
 
 
 # 全局单例
