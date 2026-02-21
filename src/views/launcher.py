@@ -409,6 +409,7 @@ class LauncherView(BaseView):
             menu.add_command(label="编辑", command=lambda: self._edit_action(action_idx))
             menu.add_command(label="删除", command=lambda: self._delete_action(action_idx))
             menu.add_command(label="导出动作", command=lambda: self._export_action(action_idx))
+            menu.add_command(label="发布到商店", command=lambda: self._publish_action(action_idx))
             menu.add_separator()
 
         menu.add_command(label="添加操作", command=self._add_action)
@@ -416,6 +417,9 @@ class LauncherView(BaseView):
         menu.add_separator()
         menu.add_command(label="导出整页", command=self._export_page)
         menu.add_command(label="导入页面", command=self._import_page)
+        menu.add_command(label="发布整页", command=self._publish_page)
+        menu.add_separator()
+        menu.add_command(label="📦 动作商店", command=self._open_store)
         menu.add_separator()
         menu.add_command(label="添加页面", command=self._add_page)
         if len(self._pages) > 1:
@@ -913,3 +917,97 @@ class LauncherView(BaseView):
             self.app._show_toast("页面导入成功!")
         else:
             self.app._show_toast("无效的动作包!")
+
+    # ── 动作商店 ──
+
+    def _open_store(self):
+        """打开动作商店浏览对话框"""
+        from ..dialogs.store_dialog import StoreDialog
+        StoreDialog(self.app.root, self.theme, self.app.store,
+                    on_install=self._on_store_install).show()
+
+    def _on_store_install(self, data):
+        """商店安装回调"""
+        pkg_type = data.get('type', 'action')
+        if pkg_type == 'action' and 'action' in data:
+            action = data['action']
+            self._ensure_page()
+            page = self._pages[self._current_page]
+            actions = page.setdefault('actions', [])
+            placed = False
+            for i in range(len(actions)):
+                if actions[i] is None:
+                    actions[i] = action
+                    placed = True
+                    break
+            if not placed:
+                actions.append(action)
+            self.app._save_config()
+            self._refresh_hotkeys()
+            self.app._render()
+            self.app._show_toast("安装成功!")
+        elif pkg_type == 'page' and 'page' in data:
+            page_data = data['page']
+            new_page = {
+                'name': page_data.get('name', '商店页面'),
+                'actions': page_data.get('actions', []),
+            }
+            ctx = page_data.get('context', '')
+            if ctx:
+                new_page['context'] = ctx
+            pages = self.app.config.setdefault('launcher', {}).setdefault('pages', [])
+            pages.append(new_page)
+            self._current_page = len(pages) - 1
+            self.app._save_config()
+            self._refresh_hotkeys()
+            self.app._render()
+            self.app._show_toast("页面安装成功!")
+
+    def _publish_action(self, idx):
+        """发布单个动作到商店"""
+        pages = self._pages
+        if self._current_page >= len(pages):
+            return
+        actions = pages[self._current_page].get('actions', [])
+        if idx >= len(actions) or actions[idx] is None:
+            return
+        action = actions[idx]
+
+        from ..dialogs.publish_dialog import PublishDialog
+        result = PublishDialog(self.app.root, self.theme, action=action).show()
+        if result:
+            icon = action.get('icon', '📦')
+            item_id = self.app.store.publish(
+                action=result['action'],
+                name=result['name'],
+                description=result['description'],
+                author=result['author'],
+                category=result['category'],
+                icon=icon)
+            if item_id:
+                self.app._show_toast("发布成功!")
+            else:
+                self.app._show_toast("发布失败!")
+
+    def _publish_page(self):
+        """发布当前整页到商店"""
+        pages = self._pages
+        if self._current_page >= len(pages):
+            return
+        page = pages[self._current_page]
+
+        from ..dialogs.publish_dialog import PublishDialog
+        result = PublishDialog(self.app.root, self.theme, page=page).show()
+        if result:
+            icon = '📄'
+            item_id = self.app.store.publish(
+                page=result['page'],
+                name=result['name'],
+                description=result['description'],
+                author=result['author'],
+                category=result['category'],
+                icon=icon)
+            if item_id:
+                self.app._show_toast("页面发布成功!")
+            else:
+                self.app._show_toast("发布失败!")

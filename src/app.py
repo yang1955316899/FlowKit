@@ -13,6 +13,7 @@ from .core.platform_api import PlatformAPIServer
 from .core.tray import SystemTray
 from .core.stats import ActionStats
 from .core.selection import SelectionWatcher
+from .core.store import ActionStore
 from .themes.dark import DARK
 from .themes.light import LIGHT
 from .utils.http import HttpClient
@@ -69,6 +70,9 @@ class App:
         # usage stats
         self.stats = ActionStats()
         self.executor.set_stats(self.stats)
+
+        # action store
+        self.store = ActionStore()
 
         # platform API server for script actions
         self._api_server = PlatformAPIServer(
