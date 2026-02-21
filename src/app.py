@@ -12,6 +12,7 @@ from .core.actions import ActionExecutor
 from .core.platform_api import PlatformAPIServer
 from .core.tray import SystemTray
 from .core.stats import ActionStats
+from .core.selection import SelectionWatcher
 from .themes.dark import DARK
 from .themes.light import LIGHT
 from .utils.http import HttpClient
@@ -482,9 +483,16 @@ class App:
             on_exit=lambda: self.root.after(0, self.root.destroy),
         )
         self._tray.start()
+        # start selection watcher (optional)
+        self._selection_popup = None
+        self._selection_watcher = None
+        if self.config.get('launcher', {}).get('selection_popup', False):
+            self._start_selection_watcher()
         self.scheduler.start(); self._check_mouse(); self.root.mainloop()
         self._stop_hotkey()
         self._tray.stop()
+        if self._selection_watcher:
+            self._selection_watcher.stop()
         self._api_server.stop()
 
     def _tray_show(self):
@@ -498,6 +506,21 @@ class App:
         """托盘菜单 — 打开设置"""
         self._tray_show()
         self._switch_view('settings')
+
+    def _start_selection_watcher(self):
+        """启动文本选中浮窗"""
+        from .dialogs.selection_popup import SelectionPopup
+        self._selection_popup = SelectionPopup(
+            self.root, self.theme, self.executor)
+        self._selection_watcher = SelectionWatcher(
+            self.root, self.theme,
+            on_selection=self._on_text_selected)
+        self._selection_watcher.start()
+
+    def _on_text_selected(self, text, x, y):
+        """文本选中回调"""
+        if self._selection_popup:
+            self._selection_popup.show(text, x, y)
 
     def _start_hotkey(self):
         """启动全局热键和鼠标钩子"""

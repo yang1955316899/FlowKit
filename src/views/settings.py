@@ -47,6 +47,10 @@ class SettingsView(BaseView):
         mc = launcher_cfg.get('middle_click', True)
         y = self._draw_toggle(canvas, mx, y, cw, "鼠标中键", mc, 'tog_middle')
 
+        # selection popup toggle
+        sp = launcher_cfg.get('selection_popup', False)
+        y = self._draw_toggle(canvas, mx, y, cw, "选中浮窗", sp, 'tog_selection')
+
         y += 8
 
         # section: Theme
@@ -162,6 +166,9 @@ class SettingsView(BaseView):
             if tag == 'tog_middle':
                 self._toggle_middle_click()
                 return True
+            if tag == 'tog_selection':
+                self._toggle_selection_popup()
+                return True
             if tag.startswith('dv_'):
                 self._set_default_view(tag[3:])
                 return True
@@ -192,6 +199,19 @@ class SettingsView(BaseView):
         launcher = self.app.config.setdefault('launcher', {})
         launcher['middle_click'] = not launcher.get('middle_click', True)
         self.app._save_config()
+        self.app._render()
+
+    def _toggle_selection_popup(self):
+        launcher = self.app.config.setdefault('launcher', {})
+        new_val = not launcher.get('selection_popup', False)
+        launcher['selection_popup'] = new_val
+        self.app._save_config()
+        if new_val and not self.app._selection_watcher:
+            self.app._start_selection_watcher()
+        elif not new_val and self.app._selection_watcher:
+            self.app._selection_watcher.stop()
+            self.app._selection_watcher = None
+            self.app._selection_popup = None
         self.app._render()
 
     def _set_default_view(self, view_name):
