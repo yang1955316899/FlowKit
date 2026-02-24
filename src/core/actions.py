@@ -171,26 +171,10 @@ class ActionExecutor:
         self._feedback("已发送!")
 
     def _exec_combo(self, action: dict):
-        """顺序执行组合动作"""
-        steps = action.get('steps', [])
-        delay = action.get('delay', 500) / 1000.0
-        for i, step in enumerate(steps):
-            if i > 0:
-                time.sleep(delay)
-            # combo 内部同步执行，不再开新线程
-            t = step.get('type', '')
-            handler = {
-                'app': self._exec_app,
-                'file': self._exec_file,
-                'folder': self._exec_folder,
-                'url': self._exec_url,
-                'shell': self._exec_shell,
-                'snippet': self._exec_snippet,
-                'keys': self._exec_keys,
-                'script': self._exec_script,
-            }.get(t)
-            if handler:
-                handler(step)
+        """顺序执行组合动作（委托给 ComboExecutor）"""
+        from .combo_executor import ComboExecutor
+        executor = ComboExecutor(self)
+        executor.execute(action)
 
     def _exec_script(self, action: dict):
         """执行 Python 脚本"""
@@ -268,6 +252,7 @@ class ActionExecutor:
 # ── 按键模拟工具 ──
 
 INPUT_KEYBOARD = 1
+INPUT_MOUSE = 0
 KEYEVENTF_KEYUP = 0x0002
 KEYEVENTF_EXTENDEDKEY = 0x0001
 
@@ -298,9 +283,20 @@ class KEYBDINPUT(ctypes.Structure):
     ]
 
 
+class MOUSEINPUT(ctypes.Structure):
+    _fields_ = [
+        ('dx', ctypes.wintypes.LONG),
+        ('dy', ctypes.wintypes.LONG),
+        ('mouseData', ctypes.wintypes.DWORD),
+        ('dwFlags', ctypes.wintypes.DWORD),
+        ('time', ctypes.wintypes.DWORD),
+        ('dwExtraInfo', ctypes.POINTER(ctypes.c_ulong)),
+    ]
+
+
 class INPUT(ctypes.Structure):
     class _INPUT(ctypes.Union):
-        _fields_ = [('ki', KEYBDINPUT)]
+        _fields_ = [('ki', KEYBDINPUT), ('mi', MOUSEINPUT)]
     _fields_ = [
         ('type', ctypes.wintypes.DWORD),
         ('_input', _INPUT),

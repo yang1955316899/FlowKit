@@ -412,6 +412,8 @@ class LauncherView(BaseView):
         menu.add_command(label="添加操作", command=self._add_action)
         menu.add_command(label="导入动作", command=self._import_action)
         menu.add_separator()
+        menu.add_command(label="🔴 录制操作", command=self._start_recording)
+        menu.add_separator()
         menu.add_command(label="导出整页", command=self._export_page)
         menu.add_command(label="导入页面", command=self._import_page)
         menu.add_command(label="发布整页", command=self._publish_page)
@@ -554,6 +556,63 @@ class LauncherView(BaseView):
         """动作变更后刷新全局快捷键注册"""
         if hasattr(self.app, '_register_action_hotkeys'):
             self.app._register_action_hotkeys()
+
+    # ── 录制 ──
+
+    def _start_recording(self):
+        """开始录制键鼠操作"""
+        from ..core.recorder import InputRecorder
+        from ..dialogs.recorder_toolbar import RecorderToolbar
+
+        # 隐藏面板
+        self.app.root.withdraw()
+
+        recorder = InputRecorder()
+        toolbar = RecorderToolbar(self.app.root, self.theme,
+                                   on_stop=self._on_recording_stop)
+        toolbar.set_recorder(recorder)
+        recorder.start()
+
+    def _on_recording_stop(self, steps: list):
+        """录制停止回调 — 打开编辑器预填步骤"""
+        # 恢复面板
+        self.app.root.deiconify()
+        self.app.root.lift()
+
+        if not steps:
+            self.app._show_toast("未录制到操作")
+            return
+
+        from ..dialogs.enhanced_combo_editor import EnhancedComboEditor
+        result = EnhancedComboEditor(self.app.root, self.theme,
+                                      combo={'steps': steps, 'delay': 100}).show()
+        if result:
+            # 保存为 combo 动作
+            action = {
+                'id': str(uuid.uuid4())[:8],
+                'type': 'combo',
+                'label': f'录制 ({len(result["steps"])} 步)',
+                'icon': '🎬',
+                'target': '',
+                'steps': result['steps'],
+                'delay': result['delay'],
+            }
+            self._ensure_page()
+            pages = self._pages
+            page = pages[self._current_page]
+            actions = page.setdefault('actions', [])
+            placed = False
+            for i in range(len(actions)):
+                if actions[i] is None:
+                    actions[i] = action
+                    placed = True
+                    break
+            if not placed:
+                actions.append(action)
+            self.app._save_config()
+            self._refresh_hotkeys()
+            self.app._render()
+            self.app._show_toast("录制已保存!")
 
     # ── 搜索 ──
 

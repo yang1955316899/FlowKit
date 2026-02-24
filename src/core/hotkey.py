@@ -6,8 +6,20 @@ import threading
 
 WM_HOTKEY = 0x0312
 WH_MOUSE_LL = 14
+WH_KEYBOARD_LL = 13
 WM_MBUTTONDOWN = 0x0207
+WM_LBUTTONDOWN = 0x0201
+WM_LBUTTONUP = 0x0202
+WM_RBUTTONDOWN = 0x0204
+WM_RBUTTONUP = 0x0205
+WM_MOUSEMOVE = 0x0200
+WM_MOUSEWHEEL = 0x020A
+WM_KEYDOWN = 0x0100
+WM_KEYUP = 0x0101
+WM_SYSKEYDOWN = 0x0104
+WM_SYSKEYUP = 0x0105
 HC_ACTION = 0
+LLKHF_INJECTED = 0x00000010
 
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
@@ -59,6 +71,16 @@ class MSLLHOOKSTRUCT(ctypes.Structure):
     _fields_ = [
         ('pt', ctypes.wintypes.POINT),
         ('mouseData', ctypes.wintypes.DWORD),
+        ('flags', ctypes.wintypes.DWORD),
+        ('time', ctypes.wintypes.DWORD),
+        ('dwExtraInfo', ctypes.POINTER(ctypes.c_ulong)),
+    ]
+
+
+class KBDLLHOOKSTRUCT(ctypes.Structure):
+    _fields_ = [
+        ('vkCode', ctypes.wintypes.DWORD),
+        ('scanCode', ctypes.wintypes.DWORD),
         ('flags', ctypes.wintypes.DWORD),
         ('time', ctypes.wintypes.DWORD),
         ('dwExtraInfo', ctypes.POINTER(ctypes.c_ulong)),

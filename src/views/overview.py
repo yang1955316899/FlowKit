@@ -36,7 +36,7 @@ class OverviewView(BaseView):
             dc_glow = c['green_glow'] if days > 14 else c['yellow_glow'] if days > 7 else c['red_glow']
 
             has_bar = limit and limit > 0
-            ch = 72 if has_bar else 52
+            ch = 96 if has_bar else 52
 
             # card bg
             rrect(canvas, mx, y, mx+cw, y+ch, 10, fill=c['card'])
@@ -80,21 +80,24 @@ class OverviewView(BaseView):
                 bc = c['red'] if pct > 0.9 else c['yellow'] if pct > 0.7 else c['accent']
 
                 bar_x = mx + 14
-                bar_y = y + 34
+                bar_y = y + 36
                 bar_w = cw - 28
-                bar_h = 4
+                bar_h = 14
                 pill(canvas, bar_x, bar_y, bar_x+bar_w, bar_y+bar_h, fill=c['bar_bg'])
-                fw = max(2, int(bar_w * pct))
-                if fw > 3:
+                fw = max(bar_h, int(bar_w * pct))
+                if pct > 0.005:
                     pill(canvas, bar_x, bar_y, bar_x+fw, bar_y+bar_h, fill=bc)
+                    # 进度条内显示百分比
+                    if fw > 36:
+                        canvas.create_text(bar_x + fw - 6, bar_y + bar_h // 2,
+                                           text=f"{pct*100:.0f}%", fill='#1e1e2e',
+                                           font=(fm, 7, 'bold'), anchor='e')
 
-                info_y = bar_y + bar_h + 10
+                info_y = bar_y + bar_h + 14
                 canvas.create_text(mx+14, info_y, text=cost_str, fill=c['text'],
-                                   font=(fm, 8, 'bold'), anchor='w')
-                canvas.create_text(mx+cw//2, info_y, text=f"{pct*100:.1f}%", fill=bc,
-                                   font=(fm, 8, 'bold'))
+                                   font=(fm, 9, 'bold'), anchor='w')
                 canvas.create_text(mx+cw-14, info_y, text=f"/ ${limit:.0f}", fill=c['dim'],
-                                   font=(fm, 7), anchor='e')
+                                   font=(fm, 8), anchor='e')
 
                 canvas.create_text(mx+14, y+ch-8, text=expire, fill=c['dim'],
                                    font=(fm, 6), anchor='w')

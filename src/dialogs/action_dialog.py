@@ -163,6 +163,14 @@ class ActionDialog:
                           padx=10, pady=4)
         combo_btn.pack(fill='x')
         combo_btn.bind('<Button-1>', lambda e: self._edit_combo())
+
+        # 可视化编辑按钮
+        flow_btn = Label(self._combo_frame, text="可视化编辑...", fg=theme['accent'],
+                         bg=theme['card2'], font=(self._f, 8), cursor='hand2',
+                         padx=10, pady=4)
+        flow_btn.pack(fill='x', pady=(4, 0))
+        flow_btn.bind('<Button-1>', lambda e: self._edit_flow())
+
         self._combo_info = Label(self._combo_frame, text=f"{len(self._combo_steps)} 个步骤",
                                   fg=theme['dim'], bg=theme['bg'], font=(self._fm, 7))
         self._combo_info.pack(anchor='w', pady=(4, 0))
@@ -343,10 +351,21 @@ class ActionDialog:
     # ── combo editor ──
 
     def _edit_combo(self):
-        from .combo_editor import ComboEditor
-        result = ComboEditor(self.win, self.theme,
+        from .enhanced_combo_editor import EnhancedComboEditor
+        result = EnhancedComboEditor(self.win, self.theme,
                              combo={'steps': self._combo_steps,
                                     'delay': self._combo_delay}).show()
+        if result:
+            self._combo_steps = result['steps']
+            self._combo_delay = result['delay']
+            self._combo_info.configure(text=f"{len(self._combo_steps)} 个步骤, {self._combo_delay}ms 延迟")
+
+    def _edit_flow(self):
+        from .flow_editor import FlowEditor
+        result = FlowEditor(self.win, self.theme,
+                             combo={'steps': self._combo_steps,
+                                    'delay': self._combo_delay},
+                             executor=self._executor).show()
         if result:
             self._combo_steps = result['steps']
             self._combo_delay = result['delay']
