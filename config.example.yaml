@@ -1,0 +1,44 @@
+window:
+  width: 360
+  opacity: 0.92
+  theme: dark
+  edge_threshold: 8
+  hidden_visible: 4
+  animation_speed: 8
+  animation_step: 40
+api:
+  base_url: http://your-api-server:port
+  tokens:
+  - name: My Token
+    credential: sk-YOUR_API_KEY_HERE
+    daily_limit: 100.0
+cards:
+- type: token_stats
+  title: Token 统计
+  refresh: 20
+launcher:
+  grid:
+  - 4
+  - 7
+  default_view: launcher
+  hotkey: ctrl+space
+  middle_click: true
+  pages:
+  - name: 工具
+    actions:
+    - type: app
+      label: 终端
+      icon: 💻
+      target: wt.exe
+      id: t001
+    - type: app
+      label: VS Code
+      icon: 📝
+      target: code
+      id: t002
+    - type: keys
+      label: 截图
+      icon: 📷
+      target: win+shift+s
+      id: t003
+  selection_popup: false

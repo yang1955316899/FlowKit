@@ -8,3 +8,15 @@ dist/
 build/
 .env
 uv.lock
+
+# 用户配置（含敏感凭据）
+config.yaml
+.action_stats.json
+.script_store.json
+
+# Claude Code
+.claude/
+
+# 临时文件
+*.png
+*.bmp

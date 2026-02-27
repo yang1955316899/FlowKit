@@ -1,7 +1,7 @@
 [project]
-name = "monitor"
+name = "flowkit"
 version = "0.1.0"
-description = "Desktop monitoring dashboard with pluggable cards"
+description = "Windows desktop toolkit — launcher, flow orchestrator, and monitoring dashboard"
 requires-python = ">=3.12"
 dependencies = [
     "requests>=2.31.0",
