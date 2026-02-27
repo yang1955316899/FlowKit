@@ -217,32 +217,22 @@ class App:
         """Cleanup resources on exit"""
         app_logger.info("Cleaning up resources...")
 
-        try:
-            self._stop_hotkey()
-        except Exception as e:
-            app_logger.error(f"Error stopping hotkey: {e}")
+        # 定义清理任务列表
+        cleanup_tasks = [
+            ('hotkey manager', lambda: self._stop_hotkey()),
+            ('system tray', lambda: self._tray.stop()),
+            ('selection watcher', lambda: self._selection_watcher.stop() if self._selection_watcher else None),
+            ('API server', lambda: self._api_server.stop()),
+            ('web server', lambda: self._web_server.stop() if self._web_server else None),
+        ]
 
-        try:
-            self._tray.stop()
-        except Exception as e:
-            app_logger.error(f"Error stopping tray: {e}")
-
-        try:
-            if self._selection_watcher:
-                self._selection_watcher.stop()
-        except Exception as e:
-            app_logger.error(f"Error stopping selection watcher: {e}")
-
-        try:
-            self._api_server.stop()
-        except Exception as e:
-            app_logger.error(f"Error stopping API server: {e}")
-
-        try:
-            if self._web_server:
-                self._web_server.stop()
-        except Exception as e:
-            app_logger.error(f"Error stopping web server: {e}")
+        # 统一执行清理
+        for name, cleanup_fn in cleanup_tasks:
+            try:
+                cleanup_fn()
+                app_logger.debug(f"Successfully stopped {name}")
+            except Exception as e:
+                app_logger.error(f"Error stopping {name}: {e}")
 
         app_logger.info("Cleanup complete")
 

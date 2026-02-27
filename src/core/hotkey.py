@@ -3,6 +3,9 @@
 import ctypes
 import ctypes.wintypes
 import threading
+from ..utils.logger import get_logger
+
+logger = get_logger('hotkey')
 
 WM_HOTKEY = 0x0312
 WH_MOUSE_LL = 14
@@ -103,17 +106,26 @@ class InputHookManager:
         self._pending_unregister = []  # 运行时移除的热键 ID
 
     def register_hotkey(self, hotkey_str: str, callback) -> int:
-        """注册全局热键，如 'ctrl+space'，返回热键 ID"""
+        """注册全局热键，如 'ctrl+space'，返回热键 ID
+
+        Returns:
+            热键 ID，失败返回 0
+        """
         mods, vk = self._parse_hotkey(hotkey_str)
         if not vk:
+            logger.warning(f"Invalid hotkey string: {hotkey_str}")
             return 0
+
         hid = self._hotkey_id
         self._hotkeys[hid] = (mods, vk, callback)
         self._hotkey_id += 1
+
         # 如果已在运行，通过消息循环注册
         if self._running and self._thread_id:
             self._pending_register.append(hid)
             user32.PostThreadMessageW(self._thread_id, 0x0400, 0, 0)  # WM_USER
+            logger.info(f"Hotkey '{hotkey_str}' registered with ID {hid}")
+
         return hid
 
     def unregister_hotkey(self, hid: int):
