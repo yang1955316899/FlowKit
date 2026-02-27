@@ -11,6 +11,10 @@ import time
 import winreg
 import requests as _requests
 from pathlib import Path
+from ..utils.logger import get_logger
+from ..utils.clipboard import get_text as clipboard_get_text, set_text as clipboard_set_text
+
+logger = get_logger('platform_api')
 
 
 class PlatformAPIServer:
@@ -108,6 +112,7 @@ class PlatformAPIServer:
         self._server.settimeout(1.0)
         self._running = True
         threading.Thread(target=self._accept_loop, daemon=True).start()
+        logger.info(f"Platform API server started on port {self._port}")
 
     def stop(self):
         """停止 TCP 服务"""
@@ -115,19 +120,22 @@ class PlatformAPIServer:
         if self._server:
             try:
                 self._server.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Error closing server socket: {e}")
         self._save_store()
+        logger.info("Platform API server stopped")
 
     def _accept_loop(self):
         while self._running:
             try:
-                conn, _ = self._server.accept()
+                conn, addr = self._server.accept()
+                logger.debug(f"New connection from {addr}")
                 threading.Thread(target=self._handle_conn, args=(conn,), daemon=True).start()
             except socket.timeout:
                 continue
-            except Exception:
+            except Exception as e:
                 if self._running:
+                    logger.error(f"Error accepting connection: {e}")
                     continue
                 break
 
@@ -167,13 +175,16 @@ class PlatformAPIServer:
         method = req.get('method', '')
         params = req.get('params', {})
         req_id = req.get('id', 0)
+        logger.debug(f"API call: {method}")
         handler = self._handlers.get(method)
         if not handler:
+            logger.warning(f"Unknown method: {method}")
             return {'id': req_id, 'error': f'unknown method: {method}'}
         try:
             result = handler(**params) if isinstance(params, dict) else handler(*params)
             return {'id': req_id, 'result': result}
         except Exception as e:
+            logger.error(f"Error executing {method}: {e}")
             return {'id': req_id, 'error': str(e)}
 
     # ── 持久化存储 ──
@@ -182,55 +193,27 @@ class PlatformAPIServer:
         try:
             if self._store_path.exists():
                 self._store = json.loads(self._store_path.read_text('utf-8'))
-        except Exception:
+                logger.debug(f"Loaded store with {len(self._store)} entries")
+        except Exception as e:
+            logger.warning(f"Failed to load store: {e}")
             self._store = {}
 
     def _save_store(self):
         try:
             self._store_path.write_text(json.dumps(self._store, ensure_ascii=False, indent=2), 'utf-8')
-        except Exception:
-            pass
+            logger.debug(f"Saved store with {len(self._store)} entries")
+        except Exception as e:
+            logger.error(f"Failed to save store: {e}")
 
     # ── 剪贴板 API ──
 
     def _clipboard_get_text(self) -> str:
-        CF_UNICODETEXT = 13
-        user32 = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
-        if not user32.OpenClipboard(0):
-            return ''
-        try:
-            h = user32.GetClipboardData(CF_UNICODETEXT)
-            if not h:
-                return ''
-            p = kernel32.GlobalLock(h)
-            if not p:
-                return ''
-            try:
-                return ctypes.wstring_at(p)
-            finally:
-                kernel32.GlobalUnlock(h)
-        finally:
-            user32.CloseClipboard()
+        """获取剪贴板文本（复用 utils/clipboard.py）"""
+        return clipboard_get_text()
 
     def _clipboard_set_text(self, text: str = '') -> bool:
-        CF_UNICODETEXT = 13
-        user32 = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
-        if not user32.OpenClipboard(0):
-            return False
-        try:
-            user32.EmptyClipboard()
-            data = text.encode('utf-16-le') + b'\x00\x00'
-            h = kernel32.GlobalAlloc(0x0042, len(data))
-            if h:
-                p = kernel32.GlobalLock(h)
-                ctypes.memmove(p, data, len(data))
-                kernel32.GlobalUnlock(h)
-                user32.SetClipboardData(CF_UNICODETEXT, h)
-            return True
-        finally:
-            user32.CloseClipboard()
+        """设置剪贴板文本（复用 utils/clipboard.py）"""
+        return clipboard_set_text(text)
 
     def _clipboard_get_files(self) -> list:
         CF_HDROP = 15

@@ -239,7 +239,7 @@ class InputRecorder:
         return steps
 
     def _filter_events(self) -> list[RawEvent]:
-        """智能过滤：合并 50ms 内的连续鼠标移动"""
+        """智能过滤：合并相近的鼠标移动（使用距离阈值）"""
         if not self._events:
             return []
 
@@ -248,16 +248,20 @@ class InputRecorder:
         while i < len(self._events):
             ev = self._events[i]
             if ev.kind == 'mouse_move':
-                # 找到连续移动的最后一个
+                # 找到移动距离超过阈值的最后一个
                 j = i + 1
+                last_ev = ev
                 while j < len(self._events):
                     nev = self._events[j]
-                    if nev.kind == 'mouse_move' and nev.time - ev.time < 50:
-                        ev = nev
+                    if nev.kind == 'mouse_move':
+                        # 距离阈值: 10 像素
+                        dist = ((nev.x - last_ev.x)**2 + (nev.y - last_ev.y)**2)**0.5
+                        if dist > 10:
+                            last_ev = nev
                         j += 1
                     else:
                         break
-                result.append(ev)
+                result.append(last_ev)
                 i = j
             else:
                 result.append(ev)

@@ -6,6 +6,9 @@ import ctypes
 import ctypes.wintypes
 from ..utils.logger import get_logger
 from ..utils.clipboard import get_text as clipboard_get_text, set_text as clipboard_set_text
+from ..utils.keyboard import (
+    INPUT, KEYBDINPUT, INPUT_KEYBOARD, KEYEVENTF_UNICODE, KEYEVENTF_KEYUP
+)
 
 logger = get_logger('combo_executor')
 
@@ -237,19 +240,6 @@ class ComboExecutor:
         char_delay = step.get('char_delay', 50) / 1000.0
         if not text:
             return
-        INPUT_KEYBOARD = 1
-        KEYEVENTF_UNICODE = 0x0004
-        KEYEVENTF_KEYUP = 0x0002
-
-        class KEYBDINPUT(ctypes.Structure):
-            _fields_ = [('wVk', ctypes.c_ushort), ('wScan', ctypes.c_ushort),
-                        ('dwFlags', ctypes.c_ulong), ('time', ctypes.c_ulong),
-                        ('dwExtraInfo', ctypes.POINTER(ctypes.c_ulong))]
-
-        class INPUT(ctypes.Structure):
-            class _INPUT(ctypes.Union):
-                _fields_ = [('ki', KEYBDINPUT)]
-            _fields_ = [('type', ctypes.c_ulong), ('_input', _INPUT)]
 
         for ch in text:
             if self._stop_flag:
@@ -305,7 +295,8 @@ class ComboExecutor:
                 content = resp.read().decode('utf-8', errors='replace')
             if var:
                 self._variables[var] = content
-        except (urllib.error.URLError, OSError):
+        except (urllib.error.URLError, OSError) as e:
+            logger.warning(f"HTTP request failed for {url}: {e}")
             if var:
                 self._variables[var] = ''
 
@@ -319,7 +310,8 @@ class ComboExecutor:
         try:
             content = pathlib.Path(path).read_text(encoding=encoding)
             self._variables[var] = content
-        except (OSError, UnicodeDecodeError):
+        except (OSError, UnicodeDecodeError) as e:
+            logger.warning(f"Failed to read file {path}: {e}")
             self._variables[var] = ''
 
     def _exec_file_write(self, step: dict, delay: float):
@@ -337,8 +329,8 @@ class ComboExecutor:
                     f.write(content)
             else:
                 p.write_text(content, encoding=encoding)
-        except OSError:
-            pass
+        except OSError as e:
+            logger.error(f"Failed to write file {path}: {e}")
 
     def _exec_window_activate(self, step: dict, delay: float):
         title = self._interpolate(step.get('title', ''))

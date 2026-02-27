@@ -1,43 +1,73 @@
-"""动作类型定义 - 从 dialogs/action_dialog.py 提取"""
+"""动作类型枚举"""
 
-# 动作类型定义
-ACTION_TYPES = [
-    ('app', '应用'),
-    ('file', '文件'),
-    ('folder', '文件夹'),
-    ('url', '网址'),
-    ('shell', '脚本'),
-    ('snippet', '文本'),
-    ('keys', '按键'),
-    ('combo', '组合'),
-    ('script', 'Python'),
-    ('group', '分组'),
-]
+from enum import Enum
 
-# target 字段的标签随类型变化
-TARGET_LABELS = {
-    'app': '程序路径',
-    'file': '文件路径',
-    'folder': '文件夹路径',
-    'url': '网址',
-    'shell': '命令',
-    'snippet': '要复制的文本',
-    'keys': '按键组合 (如 ctrl+shift+a)',
-    'combo': '描述',
-    'script': '描述',
-    'group': '分组描述',
-}
 
-# target 字段的占位符文本
-PLACEHOLDERS = {
-    'app': 'C:\\Program Files\\App\\app.exe',
-    'file': 'C:\\path\\to\\file.txt',
-    'folder': 'C:\\path\\to\\folder',
-    'url': 'https://example.com',
-    'shell': 'echo Hello',
-    'snippet': '要复制的文本内容',
-    'keys': 'ctrl+shift+a',
-    'combo': '组合动作描述',
-    'script': 'Python 脚本描述',
-    'group': '分组名称',
-}
+class ActionType(str, Enum):
+    """动作类型枚举"""
+    APP = 'app'
+    FILE = 'file'
+    FOLDER = 'folder'
+    URL = 'url'
+    SHELL = 'shell'
+    SNIPPET = 'snippet'
+    KEYS = 'keys'
+    COMBO = 'combo'
+    SCRIPT = 'script'
+
+
+class StepType(str, Enum):
+    """步骤类型枚举（用于 combo 流程）"""
+    # 基础步骤
+    DELAY = 'delay'
+    KEYS = 'keys'
+    SNIPPET = 'snippet'
+
+    # 变量操作
+    SET_VAR = 'set_var'
+    GET_CLIPBOARD = 'get_clipboard'
+    SET_CLIPBOARD = 'set_clipboard'
+
+    # 鼠标操作
+    MOUSE_CLICK = 'mouse_click'
+    MOUSE_DOUBLE_CLICK = 'mouse_double_click'
+    MOUSE_MOVE = 'mouse_move'
+    MOUSE_SCROLL = 'mouse_scroll'
+
+    # 窗口操作
+    WAIT_WINDOW = 'wait_window'
+    WAIT_PIXEL = 'wait_pixel'
+    WINDOW_ACTIVATE = 'window_activate'
+
+    # 流程控制
+    IF_CONDITION = 'if_condition'
+    LOOP = 'loop'
+
+    # 高级操作
+    TYPE_TEXT = 'type_text'
+    TOAST = 'toast'
+    SCREENSHOT = 'screenshot'
+    HTTP_REQUEST = 'http_request'
+    FILE_READ = 'file_read'
+    FILE_WRITE = 'file_write'
+
+    # 原有动作类型（委托）
+    APP = 'app'
+    FILE = 'file'
+    FOLDER = 'folder'
+    URL = 'url'
+    SHELL = 'shell'
+    SCRIPT = 'script'
+
+
+class ShellType(str, Enum):
+    """Shell 类型枚举"""
+    CMD = 'cmd'
+    POWERSHELL = 'powershell'
+    PYTHON = 'python'
+
+
+class ScriptMode(str, Enum):
+    """脚本模式枚举"""
+    INLINE = 'inline'
+    FILE = 'file'
