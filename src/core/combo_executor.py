@@ -4,6 +4,10 @@ import re
 import time
 import ctypes
 import ctypes.wintypes
+from ..utils.logger import get_logger
+from ..utils.clipboard import get_text as clipboard_get_text, set_text as clipboard_set_text
+
+logger = get_logger('combo_executor')
 
 
 class ComboExecutor:
@@ -119,13 +123,15 @@ class ComboExecutor:
     def _exec_get_clipboard(self, step: dict, delay: float):
         var_name = step.get('var', '')
         if not var_name:
+            logger.warning("No var name for get_clipboard")
             return
-        text = self._clipboard_get_text()
+        text = clipboard_get_text()
         self._variables[var_name] = text
 
     def _exec_set_clipboard(self, step: dict, delay: float):
         value = self._interpolate(str(step.get('value', '')))
-        self._clipboard_set_text(value)
+        if not clipboard_set_text(value):
+            logger.error("Failed to set clipboard")
 
     def _exec_mouse_click(self, step: dict, delay: float):
         x = int(self._interpolate(str(step.get('x', 0))))
@@ -366,7 +372,7 @@ class ComboExecutor:
         elif source == 'process_name':
             current = self._get_foreground_process()
         elif source == 'clipboard':
-            current = self._clipboard_get_text()
+            current = clipboard_get_text()
         elif source == 'variable':
             var_name = cond.get('var_name', '')
             current = self._variables.get(var_name, '')
@@ -399,46 +405,6 @@ class ComboExecutor:
     def _get_foreground_process() -> str:
         from .context import get_foreground_process
         return get_foreground_process()
-
-    @staticmethod
-    def _clipboard_get_text() -> str:
-        CF_UNICODETEXT = 13
-        user32 = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
-        if not user32.OpenClipboard(0):
-            return ''
-        try:
-            h = user32.GetClipboardData(CF_UNICODETEXT)
-            if not h:
-                return ''
-            p = kernel32.GlobalLock(h)
-            if not p:
-                return ''
-            try:
-                return ctypes.wstring_at(p)
-            finally:
-                kernel32.GlobalUnlock(h)
-        finally:
-            user32.CloseClipboard()
-
-    @staticmethod
-    def _clipboard_set_text(text: str):
-        CF_UNICODETEXT = 13
-        user32 = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
-        if not user32.OpenClipboard(0):
-            return
-        try:
-            user32.EmptyClipboard()
-            data = text.encode('utf-16-le') + b'\x00\x00'
-            h = kernel32.GlobalAlloc(0x0042, len(data))
-            if h:
-                p = kernel32.GlobalLock(h)
-                ctypes.memmove(p, data, len(data))
-                kernel32.GlobalUnlock(h)
-                user32.SetClipboardData(CF_UNICODETEXT, h)
-        finally:
-            user32.CloseClipboard()
 
     @staticmethod
     def _get_pixel_color(x: int, y: int) -> str:

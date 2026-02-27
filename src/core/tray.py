@@ -93,14 +93,16 @@ class WNDCLASSEXW(ctypes.Structure):
 CMD_SHOW = 1001
 CMD_SETTINGS = 1002
 CMD_EXIT = 1003
+CMD_WEBUI = 1004
 
 
 class SystemTray:
     """系统托盘图标"""
 
-    def __init__(self, on_show=None, on_settings=None, on_exit=None):
+    def __init__(self, on_show=None, on_settings=None, on_webui=None, on_exit=None):
         self._on_show = on_show
         self._on_settings = on_settings
+        self._on_webui = on_webui
         self._on_exit = on_exit
         self._hwnd = None
         self._nid = None
@@ -178,6 +180,8 @@ class SystemTray:
                 self._on_show()
             elif cmd == CMD_SETTINGS and self._on_settings:
                 self._on_settings()
+            elif cmd == CMD_WEBUI and self._on_webui:
+                self._on_webui()
             elif cmd == CMD_EXIT and self._on_exit:
                 self._on_exit()
             return 0
@@ -190,6 +194,7 @@ class SystemTray:
         menu = user32.CreatePopupMenu()
         user32.AppendMenuW(menu, MF_STRING, CMD_SHOW, '显示面板')
         user32.AppendMenuW(menu, MF_STRING, CMD_SETTINGS, '设置')
+        user32.AppendMenuW(menu, MF_STRING, CMD_WEBUI, 'Web UI')
         user32.AppendMenuW(menu, MF_SEPARATOR, 0, None)
         user32.AppendMenuW(menu, MF_STRING, CMD_EXIT, '退出')
 

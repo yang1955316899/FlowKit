@@ -2,19 +2,29 @@
 
 import requests
 from typing import Any
+from .logger import get_logger
+
+logger = get_logger('http')
 
 
 class HttpClient:
     """HTTP 客户端"""
 
-    def __init__(self, base_url: str, credential: str = ''):
+    def __init__(self, base_url: str, credential: str = '', verify_ssl: bool = True):
         self.base_url = base_url.rstrip('/')
         self.credential = credential
+        self.verify_ssl = verify_ssl
         self.headers = {
             'Accept': '*/*',
             'Content-Type': 'application/json',
             'Cache-Control': 'no-cache',
         }
+
+        if not verify_ssl:
+            logger.warning("SSL verification is disabled")
+            # 禁用 SSL 警告
+            import urllib3
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     def set_credential(self, credential: str):
         """切换 credential"""
@@ -32,9 +42,16 @@ class HttpClient:
                 json=payload,
                 headers=self.headers,
                 timeout=10,
-                verify=False
+                verify=self.verify_ssl
             )
             resp.raise_for_status()
             return resp.json()
-        except Exception:
+        except requests.exceptions.SSLError as e:
+            logger.error(f"SSL verification failed for {url}: {e}")
+            return None
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request failed for {url}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}")
             return None

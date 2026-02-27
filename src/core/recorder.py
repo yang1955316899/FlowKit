@@ -4,6 +4,8 @@ import ctypes
 import ctypes.wintypes
 import threading
 import time
+from ..utils.logger import get_logger
+from ..utils.keyboard import VK_NAMES, vk_list_to_str
 
 from .hotkey import (
     HOOKPROC, MSLLHOOKSTRUCT, KBDLLHOOKSTRUCT,
@@ -14,22 +16,7 @@ from .hotkey import (
     user32, kernel32,
 )
 
-# 反向 VK 映射
-VK_NAMES = {
-    0x08: 'backspace', 0x09: 'tab', 0x0D: 'enter', 0x1B: 'esc',
-    0x20: 'space', 0x21: 'pageup', 0x22: 'pagedown',
-    0x23: 'end', 0x24: 'home',
-    0x25: 'left', 0x26: 'up', 0x27: 'right', 0x28: 'down',
-    0x2C: 'printscreen', 0x2D: 'insert', 0x2E: 'delete',
-    0x5B: 'win',
-    0x70: 'f1', 0x71: 'f2', 0x72: 'f3', 0x73: 'f4',
-    0x74: 'f5', 0x75: 'f6', 0x76: 'f7', 0x77: 'f8',
-    0x78: 'f9', 0x79: 'f10', 0x7A: 'f11', 0x7B: 'f12',
-    0x10: 'shift', 0x11: 'ctrl', 0x12: 'alt',
-    0xA0: 'shift', 0xA1: 'shift',  # L/R shift
-    0xA2: 'ctrl', 0xA3: 'ctrl',    # L/R ctrl
-    0xA4: 'alt', 0xA5: 'alt',      # L/R alt
-}
+logger = get_logger('recorder')
 
 
 class RawEvent:
@@ -194,7 +181,7 @@ class InputRecorder:
                         break
 
                 # 生成按键字符串
-                key_str = self._vk_list_to_str(combo_keys)
+                key_str = vk_list_to_str(combo_keys)
                 if key_str:
                     steps.append({
                         'type': 'keys',
@@ -276,28 +263,3 @@ class InputRecorder:
                 result.append(ev)
                 i += 1
         return result
-
-    @staticmethod
-    def _vk_list_to_str(vk_codes: list[int]) -> str:
-        """将 VK 码列表转换为按键字符串"""
-        parts = []
-        # 修饰键排前面
-        modifiers = {0x10, 0x11, 0x12, 0x5B, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5}
-        mod_parts = []
-        key_parts = []
-
-        for vk in vk_codes:
-            name = VK_NAMES.get(vk)
-            if name:
-                if vk in modifiers:
-                    if name not in mod_parts:
-                        mod_parts.append(name)
-                else:
-                    key_parts.append(name)
-            elif 0x30 <= vk <= 0x39:  # 0-9
-                key_parts.append(chr(vk))
-            elif 0x41 <= vk <= 0x5A:  # A-Z
-                key_parts.append(chr(vk).lower())
-
-        parts = mod_parts + key_parts
-        return '+'.join(parts) if parts else ''

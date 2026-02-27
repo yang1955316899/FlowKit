@@ -7,6 +7,11 @@ import ctypes.wintypes
 import subprocess
 import webbrowser
 import threading
+from ..utils.logger import get_logger
+from ..utils.clipboard import set_text as clipboard_set_text
+from ..utils.keyboard import parse_keys, send_keys
+
+logger = get_logger('executor')
 
 
 class ActionExecutor:
@@ -37,11 +42,13 @@ class ActionExecutor:
     def execute(self, action: dict):
         """按 type 分发执行"""
         if not action:
+            logger.warning("Empty action, skipping")
             return
         # 记录统计
         if self._stats and action.get('id'):
             self._stats.record(action['id'])
         t = action.get('type', '')
+        logger.info(f"Executing action: {action.get('label', 'unnamed')} (type={t})")
         handler = {
             'app': self._exec_app,
             'file': self._exec_file,
@@ -55,22 +62,31 @@ class ActionExecutor:
         }.get(t)
         if handler:
             threading.Thread(target=handler, args=(action,), daemon=True).start()
+        else:
+            logger.warning(f"Unknown action type: {t}")
 
     def _feedback(self, msg: str):
-        if self._on_feedback and self._root:
-            self._root.after(0, self._on_feedback, msg)
+        if self._on_feedback:
+            if self._root:
+                self._root.after(0, self._on_feedback, msg)
+            else:
+                # pywebview mode: call directly
+                self._on_feedback(msg)
 
     def _exec_app(self, action: dict):
         """启动应用程序"""
         target = action.get('target', '')
         if not target:
+            logger.warning("No target for app action")
             return
         args = action.get('args', '')
+        logger.debug(f"Launching app: {target} with args: {args}")
         try:
             if action.get('admin'):
                 ctypes.windll.shell32.ShellExecuteW(
                     None, 'runas', target, args, None, 1
                 )
+                logger.info(f"Launched {target} as admin")
             else:
                 if args:
                     ctypes.windll.shell32.ShellExecuteW(
@@ -78,32 +94,76 @@ class ActionExecutor:
                     )
                 else:
                     os.startfile(target)
-        except Exception:
-            self._feedback("失败!")
+                logger.info(f"Launched {target}")
+            self._feedback("已启动!")
+        except FileNotFoundError:
+            logger.error(f"File not found: {target}")
+            self._feedback(f"文件不存在")
+        except PermissionError:
+            logger.error(f"Permission denied: {target}")
+            self._feedback("权限不足")
+        except OSError as e:
+            logger.error(f"OS error launching {target}: {e}")
+            self._feedback(f"系统错误: {e.winerror if hasattr(e, 'winerror') else 'unknown'}")
+        except Exception as e:
+            logger.error(f"Failed to launch {target}: {e}")
+            error_msg = str(e)[:30] if str(e) else "未知错误"
+            self._feedback(f"启动失败: {error_msg}")
 
     def _exec_file(self, action: dict):
         """打开文件"""
         target = action.get('target', '')
-        if target:
-            try:
-                os.startfile(target)
-            except Exception:
-                self._feedback("失败!")
+        if not target:
+            logger.warning("No target for file action")
+            return
+        logger.debug(f"Opening file: {target}")
+        try:
+            os.startfile(target)
+            logger.info(f"Opened file: {target}")
+        except FileNotFoundError:
+            logger.error(f"File not found: {target}")
+            self._feedback("文件不存在")
+        except PermissionError:
+            logger.error(f"Permission denied: {target}")
+            self._feedback("权限不足")
+        except Exception as e:
+            logger.error(f"Failed to open file {target}: {e}")
+            self._feedback(f"打开失败: {str(e)[:20]}")
 
     def _exec_folder(self, action: dict):
         """打开文件夹"""
         target = action.get('target', '')
-        if target:
-            try:
-                os.startfile(target)
-            except Exception:
-                self._feedback("失败!")
+        if not target:
+            logger.warning("No target for folder action")
+            return
+        # Expand environment variables
+        target = os.path.expandvars(target)
+        logger.debug(f"Opening folder: {target}")
+        try:
+            os.startfile(target)
+            logger.info(f"Opened folder: {target}")
+        except FileNotFoundError:
+            logger.error(f"Folder not found: {target}")
+            self._feedback("文件夹不存在")
+        except PermissionError:
+            logger.error(f"Permission denied: {target}")
+            self._feedback("权限不足")
+        except Exception as e:
+            logger.error(f"Failed to open folder {target}: {e}")
+            self._feedback(f"打开失败: {str(e)[:20]}")
 
     def _exec_url(self, action: dict):
         """打开 URL"""
         target = action.get('target', '')
-        if target:
+        if not target:
+            logger.warning("No target for URL action")
+            return
+        logger.debug(f"Opening URL: {target}")
+        try:
             webbrowser.open(target)
+            logger.info(f"Opened URL: {target}")
+        except Exception as e:
+            logger.error(f"Failed to open URL {target}: {e}")
 
     def _exec_shell(self, action: dict):
         """执行 shell 命令"""
@@ -142,33 +202,28 @@ class ActionExecutor:
         """复制文本到剪贴板"""
         target = action.get('target', '')
         if not target:
+            logger.warning("No target for snippet action")
             return
-        CF_UNICODETEXT = 13
-        user32 = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
-        if not user32.OpenClipboard(0):
-            return
-        try:
-            user32.EmptyClipboard()
-            data = target.encode('utf-16-le') + b'\x00\x00'
-            h = kernel32.GlobalAlloc(0x0042, len(data))
-            if h:
-                p = kernel32.GlobalLock(h)
-                ctypes.memmove(p, data, len(data))
-                kernel32.GlobalUnlock(h)
-                user32.SetClipboardData(CF_UNICODETEXT, h)
-        finally:
-            user32.CloseClipboard()
-        self._feedback("已复制!")
+
+        if clipboard_set_text(target):
+            self._feedback("已复制!")
+        else:
+            logger.error("Failed to set clipboard")
+            self._feedback("复制失败!")
 
     def _exec_keys(self, action: dict):
         """模拟按键"""
         target = action.get('target', '')
         if not target:
+            logger.warning("No target for keys action")
             return
-        keys = _parse_keys(target)
-        _send_keys(keys)
-        self._feedback("已发送!")
+
+        keys = parse_keys(target)
+        if send_keys(keys):
+            self._feedback("已发送!")
+        else:
+            logger.error("Failed to send keys")
+            self._feedback("发送失败!")
 
     def _exec_combo(self, action: dict):
         """顺序执行组合动作（委托给 ComboExecutor）"""
@@ -247,92 +302,3 @@ class ActionExecutor:
                     pass
 
         threading.Thread(target=run, daemon=True).start()
-
-
-# ── 按键模拟工具 ──
-
-INPUT_KEYBOARD = 1
-INPUT_MOUSE = 0
-KEYEVENTF_KEYUP = 0x0002
-KEYEVENTF_EXTENDEDKEY = 0x0001
-
-VK_MAP = {
-    'ctrl': 0x11, 'control': 0x11,
-    'alt': 0x12, 'menu': 0x12,
-    'shift': 0x10,
-    'win': 0x5B, 'lwin': 0x5B,
-    'tab': 0x09, 'enter': 0x0D, 'return': 0x0D,
-    'esc': 0x1B, 'escape': 0x1B,
-    'space': 0x20, 'backspace': 0x08, 'delete': 0x2E,
-    'up': 0x26, 'down': 0x28, 'left': 0x25, 'right': 0x27,
-    'home': 0x24, 'end': 0x23, 'pageup': 0x21, 'pagedown': 0x22,
-    'insert': 0x2D, 'printscreen': 0x2C,
-    'f1': 0x70, 'f2': 0x71, 'f3': 0x72, 'f4': 0x73,
-    'f5': 0x74, 'f6': 0x75, 'f7': 0x76, 'f8': 0x77,
-    'f9': 0x78, 'f10': 0x79, 'f11': 0x7A, 'f12': 0x7B,
-}
-
-
-class KEYBDINPUT(ctypes.Structure):
-    _fields_ = [
-        ('wVk', ctypes.wintypes.WORD),
-        ('wScan', ctypes.wintypes.WORD),
-        ('dwFlags', ctypes.wintypes.DWORD),
-        ('time', ctypes.wintypes.DWORD),
-        ('dwExtraInfo', ctypes.POINTER(ctypes.c_ulong)),
-    ]
-
-
-class MOUSEINPUT(ctypes.Structure):
-    _fields_ = [
-        ('dx', ctypes.wintypes.LONG),
-        ('dy', ctypes.wintypes.LONG),
-        ('mouseData', ctypes.wintypes.DWORD),
-        ('dwFlags', ctypes.wintypes.DWORD),
-        ('time', ctypes.wintypes.DWORD),
-        ('dwExtraInfo', ctypes.POINTER(ctypes.c_ulong)),
-    ]
-
-
-class INPUT(ctypes.Structure):
-    class _INPUT(ctypes.Union):
-        _fields_ = [('ki', KEYBDINPUT), ('mi', MOUSEINPUT)]
-    _fields_ = [
-        ('type', ctypes.wintypes.DWORD),
-        ('_input', _INPUT),
-    ]
-
-
-def _parse_keys(combo_str: str) -> list[int]:
-    keys = []
-    for part in combo_str.lower().split('+'):
-        part = part.strip()
-        if part in VK_MAP:
-            keys.append(VK_MAP[part])
-        elif len(part) == 1 and part.isalnum():
-            keys.append(ord(part.upper()))
-        elif part.startswith('0x'):
-            try:
-                keys.append(int(part, 16))
-            except ValueError:
-                pass
-    return keys
-
-
-def _send_keys(vk_codes: list[int]):
-    if not vk_codes:
-        return
-    inputs = []
-    for vk in vk_codes:
-        inp = INPUT(type=INPUT_KEYBOARD)
-        inp._input.ki.wVk = vk
-        inp._input.ki.dwFlags = 0
-        inputs.append(inp)
-    for vk in reversed(vk_codes):
-        inp = INPUT(type=INPUT_KEYBOARD)
-        inp._input.ki.wVk = vk
-        inp._input.ki.dwFlags = KEYEVENTF_KEYUP
-        inputs.append(inp)
-    n = len(inputs)
-    arr = (INPUT * n)(*inputs)
-    ctypes.windll.user32.SendInput(n, arr, ctypes.sizeof(INPUT))
