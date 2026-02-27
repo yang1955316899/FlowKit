@@ -8,7 +8,7 @@ logger = get_logger('http')
 
 
 class HttpClient:
-    """HTTP 客户端"""
+    """HTTP 客户端（使用 Session 连接池）"""
 
     def __init__(self, base_url: str, credential: str = '', verify_ssl: bool = True):
         self.base_url = base_url.rstrip('/')
@@ -19,6 +19,10 @@ class HttpClient:
             'Content-Type': 'application/json',
             'Cache-Control': 'no-cache',
         }
+
+        # 使用 Session 复用连接
+        self._session = requests.Session()
+        self._session.headers.update(self.headers)
 
         if not verify_ssl:
             logger.warning("SSL verification is disabled")
@@ -37,10 +41,9 @@ class HttpClient:
         payload['credential'] = self.credential
 
         try:
-            resp = requests.post(
+            resp = self._session.post(
                 url,
                 json=payload,
-                headers=self.headers,
                 timeout=10,
                 verify=self.verify_ssl
             )
@@ -55,3 +58,12 @@ class HttpClient:
         except Exception as e:
             logger.error(f"Unexpected error: {e}")
             return None
+
+    def close(self):
+        """关闭 Session"""
+        if self._session:
+            self._session.close()
+
+    def __del__(self):
+        """析构时关闭 Session"""
+        self.close()

@@ -73,12 +73,13 @@ class ActionStats:
             清理的条目数
         """
         cutoff = time.time() - (days * 86400)
-        old_count = len(self._data)
-        self._data = {
-            k: v for k, v in self._data.items()
-            if v.get('last', 0) > cutoff
-        }
-        removed = old_count - len(self._data)
-        if removed > 0:
-            self._save()
+        with self._lock:
+            old_count = len(self._data)
+            self._data = {
+                k: v for k, v in self._data.items()
+                if v.get('last', 0) > cutoff
+            }
+            removed = old_count - len(self._data)
+            if removed > 0:
+                self._save()
         return removed

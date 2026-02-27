@@ -3,6 +3,9 @@
 import threading
 import time
 from typing import Callable
+from ..utils.logger import get_logger
+
+logger = get_logger('scheduler')
 
 
 class Scheduler:
@@ -30,17 +33,20 @@ class Scheduler:
 
     def _loop(self, func: Callable, interval: int, immediate: bool):
         """任务循环"""
+        func_name = getattr(func, '__name__', str(func))
+
         if immediate:
             try:
                 func()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Task '{func_name}' failed on immediate execution: {e}", exc_info=True)
+
         while self._running:
             time.sleep(interval)
             try:
                 func()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Task '{func_name}' failed: {e}", exc_info=True)
 
     def stop(self):
         """停止调度器"""

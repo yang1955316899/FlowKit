@@ -1,0 +1,78 @@
+/* FlowKit 主题 — 匹配原 dark.py / light.py */
+:root,
+[data-theme="mocha"] {
+  --bg: #0f0f17;
+  --card: #181825;
+  --card2: #1e1e2e;
+  --card3: #232336;
+  --overlay: #11111b;
+  --border: #313147;
+  --border-subtle: #252538;
+  --text: #cdd6f4;
+  --sub: #a6adc8;
+  --dim: #6c7086;
+  --accent: #89b4fa;
+  --accent2: #74c7ec;
+  --accent-glow: #1e3a5f;
+  --lavender: #b4befe;
+  --mauve: #cba6f7;
+  --green: #a6e3a1;
+  --green-glow: #1a3a2a;
+  --teal: #94e2d5;
+  --yellow: #f9e2af;
+  --yellow-glow: #3a3520;
+  --peach: #fab387;
+  --red: #f38ba8;
+  --red-glow: #3a1a28;
+  --pink: #f5c2e7;
+  --teal-glow: #1a3a35;
+  --peach-glow: #3a2a1a;
+  --mauve-glow: #2e1a3a;
+  --lavender-glow: #1e2040;
+  --pink-glow: #3a1a30;
+  --cyan-glow: #1a3040;
+  --bar-bg: #1e1e2e;
+  --grid: #252538;
+  --btn-bg: #1e1e2e;
+  --btn-hover: #2a2a3e;
+  --btn-active: #313147;
+  --font: 'Microsoft YaHei UI', -apple-system, sans-serif;
+  --mono: 'Consolas', 'Courier New', monospace;
+}
+[data-theme="latte"] {
+  --bg: #eff1f5;
+  --card: #ffffff;
+  --card2: #e6e9ef;
+  --card3: #dce0e8;
+  --overlay: #ccd0da;
+  --border: #bcc0cc;
+  --border-subtle: #ccd0da;
+  --text: #4c4f69;
+  --sub: #6c6f85;
+  --dim: #9ca0b0;
+  --accent: #1e66f5;
+  --accent2: #209fb5;
+  --accent-glow: #dde5fc;
+  --lavender: #7287fd;
+  --mauve: #8839ef;
+  --green: #40a02b;
+  --green-glow: #ddf5d6;
+  --teal: #179299;
+  --yellow: #df8e1d;
+  --yellow-glow: #faecc8;
+  --peach: #fe640b;
+  --red: #d20f39;
+  --red-glow: #f5d0d8;
+  --pink: #ea76cb;
+  --teal-glow: #d0f0ed;
+  --peach-glow: #fde0c8;
+  --mauve-glow: #ead0fc;
+  --lavender-glow: #dde0fc;
+  --pink-glow: #fad0ee;
+  --cyan-glow: #d0e8f0;
+  --bar-bg: #e6e9ef;
+  --grid: #ccd0da;
+  --btn-bg: #e6e9ef;
+  --btn-hover: #dce0e8;
+  --btn-active: #ccd0da;
+}

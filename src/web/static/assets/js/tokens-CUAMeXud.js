@@ -1,0 +1,1 @@
+import{c as t}from"./index-Brv2IJXv.js";const e={getAll:()=>t.get("/tokens"),getStats:e=>t.get(`/tokens/${e}/stats`),getDetails:e=>t.get(`/tokens/${e}/details`),add:e=>t.post("/tokens",e),update:(e,s)=>t.put(`/tokens/${e}`,s),delete:e=>t.delete(`/tokens/${e}`)};export{e as t};

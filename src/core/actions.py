@@ -193,11 +193,6 @@ class ActionExecutor:
                 creationflags=subprocess.CREATE_NO_WINDOW
             )
 
-    def _show_shell_output(self, title, command, shell_type):
-        from ..dialogs.shell_output import ShellOutputDialog
-        ShellOutputDialog(self._root, self._theme, title=title,
-                          command=command, shell_type=shell_type)
-
     def _exec_snippet(self, action: dict):
         """复制文本到剪贴板"""
         target = action.get('target', '')
@@ -250,7 +245,7 @@ class ActionExecutor:
             return
 
         if show_output and self._root and self._theme:
-            self._root.after(0, self._show_script_output, action)
+            # UI method removed - use Electron frontend
             return
 
         # 静默执行
@@ -267,38 +262,3 @@ class ActionExecutor:
         except Exception:
             self._feedback("脚本执行异常!")
 
-    def _show_script_output(self, action):
-        """在输出窗口中运行脚本"""
-        from ..dialogs.shell_output import ShellOutputDialog
-        title = action.get('label', '脚本')
-        mode = action.get('mode', 'inline')
-        timeout = action.get('timeout', 30)
-
-        dlg = ShellOutputDialog(self._root, self._theme, title=title)
-
-        def run():
-            try:
-                def on_output(line):
-                    try:
-                        dlg.win.after(0, dlg._append_text, line)
-                    except Exception:
-                        pass
-
-                if mode == 'file':
-                    result = self._script_runner.run_file(
-                        action.get('path', ''), timeout=timeout, on_output=on_output)
-                else:
-                    result = self._script_runner.run(
-                        action.get('code', ''), timeout=timeout, on_output=on_output)
-
-                if result.stderr:
-                    dlg.win.after(0, dlg._append_text, f'\n{result.stderr}')
-                dlg.win.after(0, dlg._set_status, result.returncode)
-            except Exception as e:
-                try:
-                    dlg.win.after(0, dlg._append_text, f'\n执行异常: {e}\n')
-                    dlg.win.after(0, dlg._set_status, -1)
-                except Exception:
-                    pass
-
-        threading.Thread(target=run, daemon=True).start()
