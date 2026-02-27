@@ -14,6 +14,7 @@ class WindowConfig:
     """窗口配置"""
     width: int = 360
     height: int = 600
+    opacity: float = 0.95
     theme: str = 'dark'
     edge_threshold: int = 8
     hidden_visible: int = 4
@@ -48,6 +49,7 @@ class LauncherConfig:
     hotkey: str = 'ctrl+space'
     middle_click: bool = True
     selection_popup: bool = False
+    grid: list[int] = field(default_factory=lambda: [4, 7])
     pages: list[dict] = field(default_factory=list)
 
 
@@ -92,11 +94,19 @@ class ConfigManager:
                 raw = yaml.safe_load(f) or {}
 
             self._config = self._parse_config(raw)
+
+            # 验证配置
+            self._validate_config(self._config)
+
             logger.info(f"Config loaded from {self.config_path}")
             return self._config
 
         except yaml.YAMLError as e:
             logger.error(f"Failed to parse config: {e}")
+            self._config = self._default_config()
+            return self._config
+        except ValueError as e:
+            logger.error(f"Config validation failed: {e}")
             self._config = self._default_config()
             return self._config
         except Exception as e:
@@ -268,3 +278,40 @@ class ConfigManager:
         result['web'] = asdict(config.web)
 
         return result
+
+    def _validate_config(self, config: AppConfig) -> None:
+        """验证配置有效性
+
+        Args:
+            config: 要验证的配置
+
+        Raises:
+            ValueError: 配置无效时抛出
+        """
+        # 验证窗口配置
+        if config.window.width < 200 or config.window.width > 2000:
+            raise ValueError(f"Invalid window width: {config.window.width} (must be 200-2000)")
+
+        if config.window.height < 400 or config.window.height > 2000:
+            raise ValueError(f"Invalid window height: {config.window.height} (must be 400-2000)")
+
+        if not 0.1 <= config.window.opacity <= 1.0:
+            raise ValueError(f"Invalid opacity: {config.window.opacity} (must be 0.1-1.0)")
+
+        if config.window.theme not in ['dark', 'light']:
+            raise ValueError(f"Invalid theme: {config.window.theme} (must be 'dark' or 'light')")
+
+        # 验证 API 配置
+        if config.api.base_url:
+            if not (config.api.base_url.startswith('http://') or config.api.base_url.startswith('https://')):
+                raise ValueError(f"Invalid API base_url: {config.api.base_url} (must start with http:// or https://)")
+
+        # 验证 Web 配置
+        if not 1024 <= config.web.port <= 65535:
+            raise ValueError(f"Invalid web port: {config.web.port} (must be 1024-65535)")
+
+        # 验证 Launcher 配置
+        if config.launcher.default_view not in ['launcher', 'detail', 'overview']:
+            raise ValueError(f"Invalid default_view: {config.launcher.default_view}")
+
+        logger.debug("Config validation passed")

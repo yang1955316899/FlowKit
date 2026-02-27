@@ -132,9 +132,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useSettingsStore } from '@/stores/settings'
+import { debounce } from '@/composables/useDebounce'
 
 const appStore = useAppStore()
 const settingsStore = useSettingsStore()
@@ -179,6 +180,34 @@ const tempWidth = ref(360)
 const tempGridCols = ref(4)
 const tempGridRows = ref(7)
 const tempHotkey = ref('ctrl+space')
+
+// 防抖保存函数
+const debouncedSaveOpacity = debounce(async (value: number) => {
+  if (value >= 0.1 && value <= 1.0) {
+    config.opacity = value
+    await settingsStore.updateConfig({ window: { opacity: value } })
+  }
+}, 500)
+
+const debouncedSaveWidth = debounce(async (value: number) => {
+  if (value >= 200 && value <= 800) {
+    config.width = value
+    await settingsStore.updateConfig({ window: { width: value } })
+  }
+}, 500)
+
+// 监听滑块变化，自动保存
+watch(tempOpacity, (newValue) => {
+  if (showOpacityEditor.value) {
+    debouncedSaveOpacity(newValue)
+  }
+})
+
+watch(tempWidth, (newValue) => {
+  if (showWidthEditor.value) {
+    debouncedSaveWidth(newValue)
+  }
+})
 
 const fetchConfig = async () => {
   await settingsStore.fetchConfig()
@@ -514,3 +543,4 @@ const closeWindow = () => {
     window.close()
   }
 }
+</script>
