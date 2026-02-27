@@ -1,7 +1,9 @@
-"""流程编排器 — 右侧属性面板"""
+"""流程编排器 — 右侧属性面板（重新设计）"""
 
-from tkinter import Frame, Label
+from tkinter import Frame, Label, Canvas, Scrollbar
+from ..widgets.draw import rrect
 from .step_editor import StepEditor
+from .flow_canvas import _get_step_color
 
 
 class FlowProperties:
@@ -15,20 +17,43 @@ class FlowProperties:
         self._selected_step = None
         self._selected_index = None
 
-        self.frame = Frame(parent, bg=theme['bg'], width=160)
+        self.frame = Frame(parent, bg=theme['bg'], width=220)
         self.frame.pack(side='right', fill='y')
         self.frame.pack_propagate(False)
 
-        Label(self.frame, text="属性", fg=theme['sub'], bg=theme['bg'],
-              font=(self._f, 8, 'bold')).pack(padx=8, pady=(8, 4), anchor='w')
+        # 标题
+        title_frame = Frame(self.frame, bg=theme['bg'])
+        title_frame.pack(fill='x', padx=12, pady=(12, 8))
+        Label(title_frame, text="属性", fg=theme['text'], bg=theme['bg'],
+              font=(self._f, 10, 'bold')).pack(anchor='w')
 
-        self._info_frame = Frame(self.frame, bg=theme['bg'])
-        self._info_frame.pack(fill='both', expand=True, padx=8)
+        # 滚动区域
+        scroll_frame = Frame(self.frame, bg=theme['bg'])
+        scroll_frame.pack(fill='both', expand=True, padx=8)
 
+        self._canvas = Canvas(scroll_frame, bg=theme['bg'], highlightthickness=0)
+        scrollbar = Scrollbar(scroll_frame, orient='vertical', command=self._canvas.yview)
+        self._info_frame = Frame(self._canvas, bg=theme['bg'])
+
+        self._info_frame.bind('<Configure>',
+                              lambda e: self._canvas.configure(scrollregion=self._canvas.bbox('all')))
+        self._canvas.create_window((0, 0), window=self._info_frame, anchor='nw')
+        self._canvas.configure(yscrollcommand=scrollbar.set)
+
+        self._canvas.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+
+        # 鼠标滚轮
+        self._canvas.bind('<Enter>',
+                          lambda e: self._canvas.bind_all('<MouseWheel>', lambda ev: self._canvas.yview_scroll(-1 * (ev.delta // 120), 'units')))
+        self._canvas.bind('<Leave>',
+                          lambda e: self._canvas.unbind_all('<MouseWheel>'))
+
+        # 初始提示
         self._hint = Label(self._info_frame, text="选择步骤\n查看属性",
-                            fg=theme['dim'], bg=theme['bg'],
-                            font=(self._f, 8), justify='center')
-        self._hint.pack(expand=True)
+                           fg=theme['dim'], bg=theme['bg'],
+                           font=(self._f, 9), justify='center')
+        self._hint.pack(expand=True, pady=40)
 
     def show_step(self, step: dict, index: int):
         """显示步骤属性"""
@@ -48,46 +73,69 @@ class FlowProperties:
         if not self._selected_step:
             Label(self._info_frame, text="选择步骤\n查看属性",
                   fg=self.theme['dim'], bg=self.theme['bg'],
-                  font=(self._f, 8), justify='center').pack(expand=True)
+                  font=(self._f, 9), justify='center').pack(expand=True, pady=40)
             return
 
         step = self._selected_step
         c = self.theme
 
-        # 类型
-        Label(self._info_frame, text=f"类型: {step.get('type', '?')}",
-              fg=c['accent'], bg=c['bg'],
-              font=(self._fm, 7, 'bold')).pack(anchor='w', pady=(0, 4))
+        # 类型卡片
+        stype = step.get('type', '?')
+        step_color, _ = _get_step_color(c, stype)
 
-        # 显示所有属性
+        type_card = Frame(self._info_frame, bg=c['card'],
+                          highlightbackground=c['border_subtle'], highlightthickness=1)
+        type_card.pack(fill='x', pady=(0, 8))
+
+        Label(type_card, text="类型", fg=c['dim'], bg=c['card'],
+              font=(self._f, 7)).pack(anchor='w', padx=10, pady=(8, 2))
+        Label(type_card, text=stype, fg=step_color, bg=c['card'],
+              font=(self._fm, 10, 'bold')).pack(anchor='w', padx=10, pady=(0, 8))
+
+        # 属性列表
         skip_keys = {'type', 'then_steps', 'else_steps', 'body_steps', 'condition'}
         for key, val in step.items():
             if key in skip_keys:
                 continue
-            if isinstance(val, (str, int, float)):
-                text = f"{key}: {val}"
-                if len(text) > 24:
-                    text = text[:24] + '...'
-                Label(self._info_frame, text=text, fg=c['sub'], bg=c['bg'],
-                      font=(self._fm, 6), anchor='w').pack(anchor='w', pady=1)
+            if isinstance(val, (str, int, float, bool)):
+                self._draw_property(key, str(val))
 
         # 条件详情
         cond = step.get('condition')
         if cond:
-            Label(self._info_frame, text="条件:", fg=c['dim'], bg=c['bg'],
-                  font=(self._fm, 6, 'bold')).pack(anchor='w', pady=(4, 0))
+            cond_card = Frame(self._info_frame, bg=c['card'],
+                              highlightbackground=c['border_subtle'], highlightthickness=1)
+            cond_card.pack(fill='x', pady=(0, 8))
+
+            Label(cond_card, text="条件", fg=c['dim'], bg=c['card'],
+                  font=(self._f, 7)).pack(anchor='w', padx=10, pady=(8, 4))
             for k, v in cond.items():
                 if v:
-                    Label(self._info_frame, text=f"  {k}: {v}",
-                          fg=c['sub'], bg=c['bg'],
-                          font=(self._fm, 6)).pack(anchor='w')
+                    Label(cond_card, text=f"{k}: {v}", fg=c['sub'], bg=c['card'],
+                          font=(self._fm, 8)).pack(anchor='w', padx=10, pady=1)
+            Label(cond_card, text="", bg=c['card']).pack(pady=4)  # padding
 
-        # 编辑按钮
-        edit_btn = Label(self._info_frame, text="✎ 编辑", fg=c['accent'],
-                         bg=c['card2'], font=(self._f, 8), cursor='hand2',
-                         padx=8, pady=3)
+        # 编辑按钮 — 更大更醒目
+        edit_btn = Label(self._info_frame, text="✎ 编辑步骤", fg='#fff',
+                         bg=c['accent'], font=(self._f, 10, 'bold'), cursor='hand2',
+                         padx=12, pady=8)
         edit_btn.pack(fill='x', pady=(8, 0))
         edit_btn.bind('<Button-1>', lambda e: self._edit_step())
+
+    def _draw_property(self, key: str, value: str):
+        """绘制单个属性"""
+        c = self.theme
+        prop_card = Frame(self._info_frame, bg=c['card'],
+                          highlightbackground=c['border_subtle'], highlightthickness=1)
+        prop_card.pack(fill='x', pady=(0, 4))
+
+        Label(prop_card, text=key, fg=c['dim'], bg=c['card'],
+              font=(self._f, 7)).pack(anchor='w', padx=10, pady=(6, 2))
+
+        # 值可能很长，需要换行
+        disp = value if len(value) <= 30 else value[:30] + '...'
+        Label(prop_card, text=disp, fg=c['text'], bg=c['card'],
+              font=(self._fm, 8), anchor='w', wraplength=180).pack(anchor='w', padx=10, pady=(0, 6))
 
     def _edit_step(self):
         if not self._selected_step:

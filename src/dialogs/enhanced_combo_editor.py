@@ -17,9 +17,11 @@ def _step_summary(step: dict) -> str:
     elif t == 'set_clipboard':
         v = step.get('value', '')
         return v[:20] + ('...' if len(v) > 20 else '')
-    elif t in ('mouse_click', 'mouse_move'):
+    elif t in ('mouse_click', 'mouse_move', 'mouse_double_click'):
         btn = f" {step.get('button', '')}" if t == 'mouse_click' else ''
         return f"({step.get('x', 0)}, {step.get('y', 0)}){btn}"
+    elif t == 'mouse_scroll':
+        return f"({step.get('x', 0)}, {step.get('y', 0)}) delta={step.get('delta', 0)}"
     elif t == 'wait_window':
         return f'"{step.get("title", "")}"'
     elif t == 'wait_pixel':
@@ -38,6 +40,24 @@ def _step_summary(step: dict) -> str:
     elif t in ('app', 'keys', 'snippet', 'shell', 'url'):
         label = step.get('label', '') or step.get('target', '')
         return label[:20] + ('...' if len(label) > 20 else '')
+    elif t == 'type_text':
+        txt = step.get('text', '')
+        return txt[:20] + ('...' if len(txt) > 20 else '')
+    elif t == 'toast':
+        msg = step.get('message', '')
+        return msg[:20] + ('...' if len(msg) > 20 else '')
+    elif t == 'window_activate':
+        return f'"{step.get("title", "")}"'
+    elif t == 'screenshot':
+        return step.get('path', '') or '截屏'
+    elif t == 'http_request':
+        m = step.get('method', 'GET')
+        u = step.get('url', '')
+        return f"{m} {u[:16]}{'...' if len(u) > 16 else ''}"
+    elif t == 'file_read':
+        return step.get('path', '')[:20]
+    elif t == 'file_write':
+        return step.get('path', '')[:20]
     return ''
 
 
@@ -69,20 +89,20 @@ class EnhancedComboEditor:
         inner.pack(fill='both', expand=True, padx=1, pady=1)
 
         # title bar
-        tb = Frame(inner, bg=theme['card'], height=30)
+        tb = Frame(inner, bg=theme['card'], height=38)
         tb.pack(fill='x')
         tb.pack_propagate(False)
 
-        dot = Canvas(tb, width=8, height=8, bg=theme['card'], highlightthickness=0)
-        dot.pack(side='left', padx=(12, 0))
-        dot.create_oval(0, 0, 8, 8, fill=theme['accent'], outline='')
+        dot = Canvas(tb, width=10, height=10, bg=theme['card'], highlightthickness=0)
+        dot.pack(side='left', padx=(14, 0))
+        dot.create_oval(0, 0, 10, 10, fill=theme['accent'], outline='')
 
-        Label(tb, text="组合编辑器", fg=theme['sub'], bg=theme['card'],
-              font=(self._f, 8, 'bold')).pack(side='left', padx=(6, 0))
+        Label(tb, text="组合编辑器", fg=theme['text'], bg=theme['card'],
+              font=(self._f, 10, 'bold')).pack(side='left', padx=(8, 0))
 
         cl = Label(tb, text="\u00D7", fg=theme['dim'], bg=theme['card'],
-                   font=(self._f, 11), cursor='hand2')
-        cl.pack(side='right', padx=10)
+                   font=(self._f, 13), cursor='hand2')
+        cl.pack(side='right', padx=12)
         cl.bind('<Button-1>', lambda e: self.win.destroy())
         tb.bind('<Button-1>', self._ds)
         tb.bind('<B1-Motion>', self._dm)
@@ -91,20 +111,20 @@ class EnhancedComboEditor:
 
         # content
         self._content = Frame(inner, bg=theme['bg'])
-        self._content.pack(fill='both', expand=True, padx=12, pady=(8, 10))
+        self._content.pack(fill='both', expand=True, padx=16, pady=(10, 12))
 
         # delay
         delay_frame = Frame(self._content, bg=theme['bg'])
-        delay_frame.pack(fill='x', pady=(0, 6))
-        Label(delay_frame, text="延迟 (ms)", fg=theme['dim'], bg=theme['bg'],
-              font=(self._fm, 7)).pack(side='left')
+        delay_frame.pack(fill='x', pady=(0, 8))
+        Label(delay_frame, text="延迟 (ms)", fg=theme['sub'], bg=theme['bg'],
+              font=(self._f, 9)).pack(side='left')
         self._delay_entry = Entry(delay_frame, bg=theme['card'], fg=theme['text'],
                                    insertbackground=theme['accent'], relief='flat',
-                                   font=(self._fm, 9), bd=0, width=8,
+                                   font=(self._fm, 10), bd=0, width=8,
                                    highlightthickness=1,
                                    highlightbackground=theme['border_subtle'],
                                    highlightcolor=theme['accent'])
-        self._delay_entry.pack(side='left', padx=(8, 0), ipady=3)
+        self._delay_entry.pack(side='left', padx=(10, 0), ipady=5)
         self._delay_entry.insert(0, str(self._delay))
 
         # scrollable steps area
@@ -134,38 +154,40 @@ class EnhancedComboEditor:
 
         # add step button
         add_frame = Frame(self._content, bg=theme['bg'])
-        add_frame.pack(fill='x', pady=(6, 0))
+        add_frame.pack(fill='x', pady=(8, 0))
         add_btn = Label(add_frame, text="+ 添加步骤 ▾", fg=theme['accent'],
-                        bg=theme['card2'], font=(self._f, 8), cursor='hand2',
-                        padx=10, pady=4)
+                        bg=theme['card'], font=(self._f, 10), cursor='hand2',
+                        padx=12, pady=6)
         add_btn.pack(fill='x')
         add_btn.bind('<Button-1>', lambda e: self._show_add_menu(e))
 
         # buttons
         bf = Frame(self._content, bg=theme['bg'])
-        bf.pack(fill='x', pady=(10, 0))
+        bf.pack(fill='x', pady=(12, 0))
 
-        sc = Canvas(bf, width=60, height=28, bg=theme['bg'], highlightthickness=0, cursor='hand2')
+        sc = Canvas(bf, width=80, height=34, bg=theme['bg'], highlightthickness=0, cursor='hand2')
         sc.pack(side='right')
-        pts = rr_points(0, 0, 60, 28, 14)
+        pts = rr_points(0, 0, 80, 34, 17)
         sc.create_polygon(pts, fill=theme['accent'], outline='')
-        sc.create_text(30, 14, text="保存", fill='#1e1e2e', font=(self._f, 8, 'bold'))
+        sc.create_text(40, 17, text="保存", fill='#1e1e2e', font=(self._f, 10, 'bold'))
         sc.bind('<Button-1>', lambda e: self._save())
 
-        cc = Canvas(bf, width=60, height=28, bg=theme['bg'], highlightthickness=0, cursor='hand2')
-        cc.pack(side='right', padx=(0, 8))
-        pts2 = rr_points(0, 0, 60, 28, 14)
+        cc = Canvas(bf, width=80, height=34, bg=theme['bg'], highlightthickness=0, cursor='hand2')
+        cc.pack(side='right', padx=(0, 10))
+        pts2 = rr_points(0, 0, 80, 34, 17)
         cc.create_polygon(pts2, fill='', outline=theme['border'])
-        cc.create_text(30, 14, text="取消", fill=theme['dim'], font=(self._f, 8))
+        cc.create_text(40, 17, text="取消", fill=theme['dim'], font=(self._f, 10))
         cc.bind('<Button-1>', lambda e: self.win.destroy())
 
         self.win.bind('<Escape>', lambda e: self.win.destroy())
 
-        dw, dh = 360, 520
+        dw, dh = 420, 580
         self.win.geometry(f"{dw}x{dh}")
         self.win.update_idletasks()
-        px = parent.winfo_rootx() + (parent.winfo_width() - dw) // 2
-        py = parent.winfo_rooty() + (parent.winfo_height() - dh) // 2
+        sw = self.win.winfo_screenwidth()
+        sh = self.win.winfo_screenheight()
+        px = (sw - dw) // 2
+        py = (sh - dh) // 2
         self.win.geometry(f"+{px}+{py}")
         self.win.grab_set()
 
@@ -186,54 +208,54 @@ class EnhancedComboEditor:
             stype = step.get('type', '?')
             num = f"{prefix}{i+1}" if prefix else f"{i+1}"
 
-            row = Frame(parent, bg=c['card'], padx=6, pady=3)
-            row.pack(fill='x', padx=(indent * 16, 0), pady=(0, 2))
+            row = Frame(parent, bg=c['card'], padx=8, pady=5)
+            row.pack(fill='x', padx=(indent * 18, 0), pady=(0, 3))
 
             # number
             Label(row, text=f"#{num}", fg=c['dim'], bg=c['card'],
-                  font=(self._fm, 6)).pack(side='left')
+                  font=(self._fm, 7)).pack(side='left')
 
             # icon + type
             icon = _step_icon(stype)
             Label(row, text=icon, fg=c['text'], bg=c['card'],
-                  font=('Segoe UI Emoji', 7)).pack(side='left', padx=(4, 0))
+                  font=('Segoe UI Emoji', 9)).pack(side='left', padx=(6, 0))
             Label(row, text=_step_type_name(stype), fg=c['accent'], bg=c['card'],
-                  font=(self._fm, 7, 'bold')).pack(side='left', padx=(2, 0))
+                  font=(self._f, 9, 'bold')).pack(side='left', padx=(3, 0))
 
             # summary
             summary = _step_summary(step)
             if summary:
                 Label(row, text=summary, fg=c['sub'], bg=c['card'],
-                      font=(self._f, 6)).pack(side='left', padx=(4, 0))
+                      font=(self._f, 8)).pack(side='left', padx=(6, 0))
 
             # action buttons
             btns = Frame(row, bg=c['card'])
             btns.pack(side='right')
 
             # edit
-            ed = Label(btns, text="✎", fg=c['dim'], bg=c['card'],
-                       font=(self._f, 8), cursor='hand2')
-            ed.pack(side='left', padx=1)
+            ed = Label(btns, text="✎", fg=c['sub'], bg=c['card'],
+                       font=(self._f, 10), cursor='hand2')
+            ed.pack(side='left', padx=2)
             ed.bind('<Button-1>', lambda e, s=steps, idx=i: self._edit_step(s, idx))
 
             # move up
             if i > 0:
-                up = Label(btns, text="▲", fg=c['dim'], bg=c['card'],
-                           font=(self._fm, 6), cursor='hand2')
-                up.pack(side='left', padx=1)
+                up = Label(btns, text="▲", fg=c['sub'], bg=c['card'],
+                           font=(self._fm, 7), cursor='hand2')
+                up.pack(side='left', padx=2)
                 up.bind('<Button-1>', lambda e, s=steps, idx=i: self._move_step(s, idx, -1))
 
             # move down
             if i < len(steps) - 1:
-                dn = Label(btns, text="▼", fg=c['dim'], bg=c['card'],
-                           font=(self._fm, 6), cursor='hand2')
-                dn.pack(side='left', padx=1)
+                dn = Label(btns, text="▼", fg=c['sub'], bg=c['card'],
+                           font=(self._fm, 7), cursor='hand2')
+                dn.pack(side='left', padx=2)
                 dn.bind('<Button-1>', lambda e, s=steps, idx=i: self._move_step(s, idx, 1))
 
             # delete
             dl = Label(btns, text="×", fg=c['red'], bg=c['card'],
-                       font=(self._f, 8), cursor='hand2')
-            dl.pack(side='left', padx=1)
+                       font=(self._f, 10), cursor='hand2')
+            dl.pack(side='left', padx=2)
             dl.bind('<Button-1>', lambda e, s=steps, idx=i: self._remove_step(s, idx))
 
             # 嵌套块
@@ -242,12 +264,12 @@ class EnhancedComboEditor:
                 else_steps = step.setdefault('else_steps', [])
 
                 then_header = Frame(parent, bg=c['bg'])
-                then_header.pack(fill='x', padx=((indent + 1) * 16, 0), pady=(0, 1))
+                then_header.pack(fill='x', padx=((indent + 1) * 18, 0), pady=(1, 1))
                 Label(then_header, text="then:", fg=c['green'], bg=c['bg'],
-                      font=(self._fm, 6, 'bold')).pack(side='left')
+                      font=(self._f, 8, 'bold')).pack(side='left')
                 add_then = Label(then_header, text="+", fg=c['accent'], bg=c['bg'],
-                                 font=(self._fm, 7), cursor='hand2')
-                add_then.pack(side='left', padx=(4, 0))
+                                 font=(self._f, 9), cursor='hand2')
+                add_then.pack(side='left', padx=(6, 0))
                 add_then.bind('<Button-1>',
                               lambda e, s=then_steps: self._show_add_menu_for(e, s))
 
@@ -256,12 +278,12 @@ class EnhancedComboEditor:
                                            prefix=f"{num}.", indent=indent + 1)
 
                 else_header = Frame(parent, bg=c['bg'])
-                else_header.pack(fill='x', padx=((indent + 1) * 16, 0), pady=(0, 1))
+                else_header.pack(fill='x', padx=((indent + 1) * 18, 0), pady=(1, 1))
                 Label(else_header, text="else:", fg=c['yellow'], bg=c['bg'],
-                      font=(self._fm, 6, 'bold')).pack(side='left')
+                      font=(self._f, 8, 'bold')).pack(side='left')
                 add_else = Label(else_header, text="+", fg=c['accent'], bg=c['bg'],
-                                 font=(self._fm, 7), cursor='hand2')
-                add_else.pack(side='left', padx=(4, 0))
+                                 font=(self._f, 9), cursor='hand2')
+                add_else.pack(side='left', padx=(6, 0))
                 add_else.bind('<Button-1>',
                               lambda e, s=else_steps: self._show_add_menu_for(e, s))
 
@@ -273,12 +295,12 @@ class EnhancedComboEditor:
                 body_steps = step.setdefault('body_steps', [])
 
                 body_header = Frame(parent, bg=c['bg'])
-                body_header.pack(fill='x', padx=((indent + 1) * 16, 0), pady=(0, 1))
+                body_header.pack(fill='x', padx=((indent + 1) * 18, 0), pady=(1, 1))
                 Label(body_header, text="body:", fg=c['accent'], bg=c['bg'],
-                      font=(self._fm, 6, 'bold')).pack(side='left')
+                      font=(self._f, 8, 'bold')).pack(side='left')
                 add_body = Label(body_header, text="+", fg=c['accent'], bg=c['bg'],
-                                 font=(self._fm, 7), cursor='hand2')
-                add_body.pack(side='left', padx=(4, 0))
+                                 font=(self._f, 9), cursor='hand2')
+                add_body.pack(side='left', padx=(6, 0))
                 add_body.bind('<Button-1>',
                               lambda e, s=body_steps: self._show_add_menu_for(e, s))
 

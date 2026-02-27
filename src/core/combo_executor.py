@@ -45,11 +45,20 @@ class ComboExecutor:
             'get_clipboard': self._exec_get_clipboard,
             'set_clipboard': self._exec_set_clipboard,
             'mouse_click': self._exec_mouse_click,
+            'mouse_double_click': self._exec_mouse_double_click,
             'mouse_move': self._exec_mouse_move,
+            'mouse_scroll': self._exec_mouse_scroll,
             'wait_window': self._exec_wait_window,
             'wait_pixel': self._exec_wait_pixel,
+            'window_activate': self._exec_window_activate,
             'if_condition': self._exec_if_condition,
             'loop': self._exec_loop,
+            'type_text': self._exec_type_text,
+            'toast': self._exec_toast,
+            'screenshot': self._exec_screenshot,
+            'http_request': self._exec_http_request,
+            'file_read': self._exec_file_read,
+            'file_write': self._exec_file_write,
         }.get(stype)
 
         if handler:
@@ -196,6 +205,153 @@ class ComboExecutor:
                 self._variables['_loop_index'] = str(iterations)
                 self._execute_steps(body, delay)
                 iterations += 1
+
+    # ── 新增步骤处理器 ──
+
+    def _exec_mouse_double_click(self, step: dict, delay: float):
+        x = int(self._interpolate(str(step.get('x', 0))))
+        y = int(self._interpolate(str(step.get('y', 0))))
+        ctypes.windll.user32.SetCursorPos(x, y)
+        time.sleep(0.05)
+        for _ in range(2):
+            ctypes.windll.user32.mouse_event(0x0002, 0, 0, 0, 0)  # LEFTDOWN
+            ctypes.windll.user32.mouse_event(0x0004, 0, 0, 0, 0)  # LEFTUP
+            time.sleep(0.03)
+
+    def _exec_mouse_scroll(self, step: dict, delay: float):
+        x = int(self._interpolate(str(step.get('x', 0))))
+        y = int(self._interpolate(str(step.get('y', 0))))
+        delta = int(self._interpolate(str(step.get('delta', -3))))
+        ctypes.windll.user32.SetCursorPos(x, y)
+        time.sleep(0.05)
+        ctypes.windll.user32.mouse_event(0x0800, 0, 0, delta * 120, 0)  # MOUSEEVENTF_WHEEL
+
+    def _exec_type_text(self, step: dict, delay: float):
+        text = self._interpolate(step.get('text', ''))
+        char_delay = step.get('char_delay', 50) / 1000.0
+        if not text:
+            return
+        INPUT_KEYBOARD = 1
+        KEYEVENTF_UNICODE = 0x0004
+        KEYEVENTF_KEYUP = 0x0002
+
+        class KEYBDINPUT(ctypes.Structure):
+            _fields_ = [('wVk', ctypes.c_ushort), ('wScan', ctypes.c_ushort),
+                        ('dwFlags', ctypes.c_ulong), ('time', ctypes.c_ulong),
+                        ('dwExtraInfo', ctypes.POINTER(ctypes.c_ulong))]
+
+        class INPUT(ctypes.Structure):
+            class _INPUT(ctypes.Union):
+                _fields_ = [('ki', KEYBDINPUT)]
+            _fields_ = [('type', ctypes.c_ulong), ('_input', _INPUT)]
+
+        for ch in text:
+            if self._stop_flag:
+                return
+            code = ord(ch)
+            inp_down = INPUT(type=INPUT_KEYBOARD)
+            inp_down._input.ki = KEYBDINPUT(wVk=0, wScan=code,
+                                             dwFlags=KEYEVENTF_UNICODE, time=0,
+                                             dwExtraInfo=None)
+            inp_up = INPUT(type=INPUT_KEYBOARD)
+            inp_up._input.ki = KEYBDINPUT(wVk=0, wScan=code,
+                                           dwFlags=KEYEVENTF_UNICODE | KEYEVENTF_KEYUP,
+                                           time=0, dwExtraInfo=None)
+            arr = (INPUT * 2)(inp_down, inp_up)
+            ctypes.windll.user32.SendInput(2, ctypes.byref(arr), ctypes.sizeof(INPUT))
+            if char_delay > 0:
+                time.sleep(char_delay)
+
+    def _exec_toast(self, step: dict, delay: float):
+        message = self._interpolate(step.get('message', ''))
+        if message and hasattr(self._executor, '_feedback'):
+            self._executor._feedback(message)
+        duration = step.get('duration', 2000)
+        time.sleep(duration / 1000.0)
+
+    def _exec_screenshot(self, step: dict, delay: float):
+        path = self._interpolate(step.get('path', ''))
+        x = step.get('x', 0)
+        y = step.get('y', 0)
+        w = step.get('w', 0)
+        h = step.get('h', 0)
+        var = step.get('var', '')
+        if hasattr(self._executor, '_platform') and self._executor._platform:
+            result = self._executor._platform._screen_screenshot(
+                path=path, x=x, y=y, w=w, h=h)
+            if var and result:
+                self._variables[var] = result
+
+    def _exec_http_request(self, step: dict, delay: float):
+        import urllib.request
+        import urllib.error
+        method = step.get('method', 'GET')
+        url = self._interpolate(step.get('url', ''))
+        body = self._interpolate(step.get('body', ''))
+        timeout = step.get('timeout', 5000) / 1000.0
+        var = step.get('var', '')
+        if not url:
+            return
+        try:
+            data = body.encode('utf-8') if method == 'POST' and body else None
+            req = urllib.request.Request(url, data=data, method=method)
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                content = resp.read().decode('utf-8', errors='replace')
+            if var:
+                self._variables[var] = content
+        except (urllib.error.URLError, OSError):
+            if var:
+                self._variables[var] = ''
+
+    def _exec_file_read(self, step: dict, delay: float):
+        import pathlib
+        path = self._interpolate(step.get('path', ''))
+        encoding = step.get('encoding', 'utf-8')
+        var = step.get('var', '')
+        if not path or not var:
+            return
+        try:
+            content = pathlib.Path(path).read_text(encoding=encoding)
+            self._variables[var] = content
+        except (OSError, UnicodeDecodeError):
+            self._variables[var] = ''
+
+    def _exec_file_write(self, step: dict, delay: float):
+        import pathlib
+        path = self._interpolate(step.get('path', ''))
+        content = self._interpolate(step.get('content', ''))
+        encoding = step.get('encoding', 'utf-8')
+        mode = step.get('mode', 'write')
+        if not path:
+            return
+        try:
+            p = pathlib.Path(path)
+            if mode == 'append':
+                with p.open('a', encoding=encoding) as f:
+                    f.write(content)
+            else:
+                p.write_text(content, encoding=encoding)
+        except OSError:
+            pass
+
+    def _exec_window_activate(self, step: dict, delay: float):
+        title = self._interpolate(step.get('title', ''))
+        if not title:
+            return
+        found = [None]
+
+        def enum_callback(hwnd, _):
+            buf = ctypes.create_unicode_buffer(256)
+            ctypes.windll.user32.GetWindowTextW(hwnd, buf, 256)
+            if title.lower() in buf.value.lower() and buf.value:
+                found[0] = hwnd
+                return False
+            return True
+
+        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+        ctypes.windll.user32.EnumWindows(WNDENUMPROC(enum_callback), 0)
+        if found[0]:
+            ctypes.windll.user32.SetForegroundWindow(found[0])
 
     # ── 条件求值 ──
 

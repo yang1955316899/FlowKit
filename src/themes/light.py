@@ -28,6 +28,13 @@ LIGHT = {
     'red_glow': '#f5ccd5',
     'pink': '#ea76cb',
 
+    'teal_glow': '#c8f0ea',
+    'peach_glow': '#fde0cc',
+    'mauve_glow': '#e8d0f8',
+    'lavender_glow': '#d8defe',
+    'pink_glow': '#f8d8f0',
+    'cyan_glow': '#c8e8f5',
+
     'bar_bg': '#e6e9ef',
     'grid': '#ccd0da',
 

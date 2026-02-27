@@ -13,17 +13,26 @@ STEP_TYPES = [
     ('get_clipboard', '读剪贴板', '📋'),
     ('set_clipboard', '写剪贴板', '📌'),
     ('mouse_click', '鼠标点击', '🖱'),
+    ('mouse_double_click', '鼠标双击', '🖱'),
     ('mouse_move', '鼠标移动', '↗'),
+    ('mouse_scroll', '鼠标滚轮', '🔄'),
     ('wait_window', '等待窗口', '🪟'),
     ('wait_pixel', '等待像素', '🎨'),
+    ('window_activate', '激活窗口', '🪟'),
     ('if_condition', '条件分支', '🔀'),
     ('loop', '循环', '🔁'),
     # 原有动作类型也可作为步骤
     ('app', '打开应用', '📂'),
     ('keys', '按键', '⌨'),
+    ('type_text', '打字', '✍'),
     ('snippet', '文本', '📄'),
+    ('toast', '提示', '💬'),
     ('shell', '命令', '💻'),
     ('url', '网址', '🌐'),
+    ('http_request', 'HTTP请求', '🔗'),
+    ('screenshot', '截图', '📸'),
+    ('file_read', '读文件', '📖'),
+    ('file_write', '写文件', '✏️'),
 ]
 
 CONDITION_SOURCES = [
@@ -159,7 +168,7 @@ class StepEditor:
             self._make_label(self._form, "内容 (支持 {{变量}})")
             self._entries['value'] = self._make_entry(self._form, s.get('value', ''))
 
-        elif t in ('mouse_click', 'mouse_move'):
+        elif t in ('mouse_click', 'mouse_move', 'mouse_double_click'):
             coord_frame = Frame(self._form, bg=self.theme['bg'])
             coord_frame.pack(fill='x')
             self._make_label(coord_frame, "X 坐标")
@@ -188,6 +197,21 @@ class StepEditor:
                     lbl.bind('<Button-1>', lambda e, b=btn_name: self._select_button(b))
                     self._btn_labels.append(lbl)
                 self._update_button_pills()
+
+        elif t == 'mouse_scroll':
+            coord_frame = Frame(self._form, bg=self.theme['bg'])
+            coord_frame.pack(fill='x')
+            self._make_label(coord_frame, "X 坐标")
+            self._entries['x'] = self._make_entry(coord_frame, s.get('x', 0))
+            self._make_label(coord_frame, "Y 坐标")
+            self._entries['y'] = self._make_entry(coord_frame, s.get('y', 0))
+            pick_btn = Label(self._form, text="🎯 拾取坐标", fg=self.theme['accent'],
+                             bg=self.theme['card2'], font=(self._f, 8), cursor='hand2',
+                             padx=10, pady=4)
+            pick_btn.pack(fill='x', pady=(6, 0))
+            pick_btn.bind('<Button-1>', lambda e: self._pick_coordinate())
+            self._make_label(self._form, "滚动量 (正=上, 负=下)")
+            self._entries['delta'] = self._make_entry(self._form, s.get('delta', -3))
 
         elif t == 'wait_window':
             self._make_label(self._form, "窗口标题 (模糊匹配)")
@@ -274,6 +298,88 @@ class StepEditor:
             self._make_label(self._form, "标签")
             self._entries['label'] = self._make_entry(self._form, s.get('label', ''))
 
+        elif t == 'type_text':
+            self._make_label(self._form, "文本内容")
+            self._entries['text'] = self._make_entry(self._form, s.get('text', ''))
+            self._make_label(self._form, "字符间隔 (ms)")
+            self._entries['char_delay'] = self._make_entry(self._form, s.get('char_delay', 50))
+
+        elif t == 'toast':
+            self._make_label(self._form, "消息内容")
+            self._entries['message'] = self._make_entry(self._form, s.get('message', ''))
+            self._make_label(self._form, "持续时间 (ms)")
+            self._entries['duration'] = self._make_entry(self._form, s.get('duration', 2000))
+
+        elif t == 'window_activate':
+            self._make_label(self._form, "窗口标题 (模糊匹配)")
+            self._entries['title'] = self._make_entry(self._form, s.get('title', ''))
+
+        elif t == 'screenshot':
+            self._make_label(self._form, "保存路径")
+            self._entries['path'] = self._make_entry(self._form, s.get('path', ''))
+            self._make_label(self._form, "X 坐标 (0=全屏)")
+            self._entries['x'] = self._make_entry(self._form, s.get('x', 0))
+            self._make_label(self._form, "Y 坐标")
+            self._entries['y'] = self._make_entry(self._form, s.get('y', 0))
+            self._make_label(self._form, "宽度 (0=全屏)")
+            self._entries['w'] = self._make_entry(self._form, s.get('w', 0))
+            self._make_label(self._form, "高度")
+            self._entries['h'] = self._make_entry(self._form, s.get('h', 0))
+            self._make_label(self._form, "保存路径到变量")
+            self._entries['var'] = self._make_entry(self._form, s.get('var', ''))
+
+        elif t == 'http_request':
+            self._make_label(self._form, "请求方法")
+            self._method_var = StringVar(value=s.get('method', 'GET'))
+            method_frame = Frame(self._form, bg=self.theme['bg'])
+            method_frame.pack(fill='x')
+            self._method_labels = []
+            for m_id, m_text in [('GET', 'GET'), ('POST', 'POST')]:
+                lbl = Label(method_frame, text=m_text, cursor='hand2',
+                            font=(self._fm, 7), padx=6, pady=2)
+                lbl.pack(side='left', padx=(0, 3))
+                lbl._method_id = m_id
+                lbl.bind('<Button-1>', lambda e, m=m_id: self._select_method(m))
+                self._method_labels.append(lbl)
+            self._update_method_pills()
+            self._make_label(self._form, "URL")
+            self._entries['url'] = self._make_entry(self._form, s.get('url', ''))
+            self._make_label(self._form, "请求体 (POST)")
+            self._entries['body'] = self._make_entry(self._form, s.get('body', ''))
+            self._make_label(self._form, "超时 (ms)")
+            self._entries['timeout'] = self._make_entry(self._form, s.get('timeout', 5000))
+            self._make_label(self._form, "响应存入变量")
+            self._entries['var'] = self._make_entry(self._form, s.get('var', ''))
+
+        elif t == 'file_read':
+            self._make_label(self._form, "文件路径")
+            self._entries['path'] = self._make_entry(self._form, s.get('path', ''))
+            self._make_label(self._form, "编码")
+            self._entries['encoding'] = self._make_entry(self._form, s.get('encoding', 'utf-8'))
+            self._make_label(self._form, "内容存入变量")
+            self._entries['var'] = self._make_entry(self._form, s.get('var', ''))
+
+        elif t == 'file_write':
+            self._make_label(self._form, "文件路径")
+            self._entries['path'] = self._make_entry(self._form, s.get('path', ''))
+            self._make_label(self._form, "内容 (支持 {{变量}})")
+            self._entries['content'] = self._make_entry(self._form, s.get('content', ''))
+            self._make_label(self._form, "编码")
+            self._entries['encoding'] = self._make_entry(self._form, s.get('encoding', 'utf-8'))
+            self._make_label(self._form, "写入模式")
+            self._write_mode_var = StringVar(value=s.get('mode', 'write'))
+            wm_frame = Frame(self._form, bg=self.theme['bg'])
+            wm_frame.pack(fill='x')
+            self._wm_labels = []
+            for wm_id, wm_text in [('write', '覆盖'), ('append', '追加')]:
+                lbl = Label(wm_frame, text=wm_text, cursor='hand2',
+                            font=(self._fm, 7), padx=6, pady=2)
+                lbl.pack(side='left', padx=(0, 3))
+                lbl._wm_id = wm_id
+                lbl.bind('<Button-1>', lambda e, m=wm_id: self._select_write_mode(m))
+                self._wm_labels.append(lbl)
+            self._update_write_mode_pills()
+
     def _build_condition_fields(self, cond: dict, parent=None):
         p = parent or self._form
         self._make_label(p, "条件来源")
@@ -319,12 +425,21 @@ class StepEditor:
             'get_clipboard': 60,
             'set_clipboard': 60,
             'mouse_click': 200,
+            'mouse_double_click': 160,
             'mouse_move': 160,
+            'mouse_scroll': 200,
             'wait_window': 110,
             'wait_pixel': 260,
+            'window_activate': 60,
             'if_condition': 220,
             'loop': 300,
             'app': 110, 'keys': 110, 'snippet': 110, 'shell': 110, 'url': 110,
+            'type_text': 110,
+            'toast': 110,
+            'screenshot': 320,
+            'http_request': 300,
+            'file_read': 160,
+            'file_write': 210,
         }
         return base + field_heights.get(t, 100)
 
@@ -390,6 +505,32 @@ class StepEditor:
             self._count_frame.pack(fill='x')
         else:
             self._cond_frame.pack(fill='x')
+
+    def _select_method(self, method):
+        self._method_var.set(method)
+        self._update_method_pills()
+
+    def _update_method_pills(self):
+        c = self.theme
+        current = self._method_var.get()
+        for lbl in self._method_labels:
+            if lbl._method_id == current:
+                lbl.configure(bg=c['accent'], fg='#1e1e2e')
+            else:
+                lbl.configure(bg=c['card2'], fg=c['dim'])
+
+    def _select_write_mode(self, mode):
+        self._write_mode_var.set(mode)
+        self._update_write_mode_pills()
+
+    def _update_write_mode_pills(self):
+        c = self.theme
+        current = self._write_mode_var.get()
+        for lbl in self._wm_labels:
+            if lbl._wm_id == current:
+                lbl.configure(bg=c['accent'], fg='#1e1e2e')
+            else:
+                lbl.configure(bg=c['card2'], fg=c['dim'])
 
     # ── 坐标拾取器 ──
 
@@ -474,7 +615,7 @@ class StepEditor:
         elif t == 'set_clipboard':
             result['value'] = self._str_val('value')
 
-        elif t in ('mouse_click', 'mouse_move'):
+        elif t in ('mouse_click', 'mouse_move', 'mouse_double_click'):
             result['x'] = self._int_val('x', 0)
             result['y'] = self._int_val('y', 0)
             if t == 'mouse_click':
@@ -508,6 +649,48 @@ class StepEditor:
         elif t in ('app', 'keys', 'snippet', 'shell', 'url'):
             result['target'] = self._str_val('target')
             result['label'] = self._str_val('label')
+
+        elif t == 'mouse_scroll':
+            result['x'] = self._int_val('x', 0)
+            result['y'] = self._int_val('y', 0)
+            result['delta'] = self._int_val('delta', -3)
+
+        elif t == 'type_text':
+            result['text'] = self._str_val('text')
+            result['char_delay'] = self._int_val('char_delay', 50)
+
+        elif t == 'toast':
+            result['message'] = self._str_val('message')
+            result['duration'] = self._int_val('duration', 2000)
+
+        elif t == 'window_activate':
+            result['title'] = self._str_val('title')
+
+        elif t == 'screenshot':
+            result['path'] = self._str_val('path')
+            result['x'] = self._int_val('x', 0)
+            result['y'] = self._int_val('y', 0)
+            result['w'] = self._int_val('w', 0)
+            result['h'] = self._int_val('h', 0)
+            result['var'] = self._str_val('var')
+
+        elif t == 'http_request':
+            result['method'] = self._method_var.get()
+            result['url'] = self._str_val('url')
+            result['body'] = self._str_val('body')
+            result['timeout'] = self._int_val('timeout', 5000)
+            result['var'] = self._str_val('var')
+
+        elif t == 'file_read':
+            result['path'] = self._str_val('path')
+            result['encoding'] = self._str_val('encoding', 'utf-8')
+            result['var'] = self._str_val('var')
+
+        elif t == 'file_write':
+            result['path'] = self._str_val('path')
+            result['content'] = self._str_val('content')
+            result['encoding'] = self._str_val('encoding', 'utf-8')
+            result['mode'] = self._write_mode_var.get()
 
         self.result = result
         self.win.destroy()

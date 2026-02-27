@@ -28,6 +28,13 @@ DARK = {
     'red_glow': '#3a1a28',
     'pink': '#f5c2e7',
 
+    'teal_glow': '#1a3a35',
+    'peach_glow': '#3a2a1a',
+    'mauve_glow': '#2e1a3a',
+    'lavender_glow': '#1e2040',
+    'pink_glow': '#3a1a30',
+    'cyan_glow': '#1a3040',
+
     'bar_bg': '#1e1e2e',
     'grid': '#252538',
 
